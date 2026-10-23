@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#f5f5f7">
+  <meta name="description" content="Gaze Lab — telefon kamerasıyla deneysel 9 nokta göz takibi ölçümü.">
+  <title>Gaze Lab — Eye Tracking Study</title>
+  <style>
+    :root { color-scheme:light; font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",Arial,sans-serif; background:#f5f5f7; color:#171717; font-synthesis:none; }
+    *{box-sizing:border-box}
+    body{margin:0;min-height:100%;-webkit-font-smoothing:antialiased}
+    button,select{font:inherit}
+    .shell{max-width:780px;margin:0 auto;padding:24px 20px 52px}
+    header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:40px}
+    .brand{font-size:18px;font-weight:700;letter-spacing:-.6px}
+    .brand small{font-size:11px;color:#86868b;font-weight:600;margin-left:6px;letter-spacing:.12em}
+    .tag{font-size:11px;letter-spacing:.08em;color:#636369;border:1px solid #d8d8dc;border-radius:99px;padding:7px 10px;text-transform:uppercase;white-space:nowrap}
+    .intro{text-align:center;margin-bottom:24px}
+    .eyebrow{font-size:11px;color:#77777c;letter-spacing:.16em;text-transform:uppercase;font-weight:700;margin-bottom:12px}
+    h1{font-size:clamp(32px,6vw,52px);letter-spacing:-.06em;line-height:1.06;font-weight:690;margin:0 0 12px}
+    .subtitle{color:#77777c;font-size:14px;line-height:1.6;max-width:470px;margin:0 auto}
+    .workspace{background:#fff;border:1px solid #ececef;border-radius:28px;box-shadow:0 14px 46px rgba(0,0,0,.035);overflow:hidden}
+    .board{height:min(60vh,490px);min-height:360px;position:relative;background:linear-gradient(#fff,#fff);overflow:hidden;touch-action:manipulation}
+    .board::after{content:"";position:absolute;inset:12px;pointer-events:none;border:1px solid #f1f1f3;border-radius:19px}
+    .centerInfo{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:82%;max-width:300px;text-align:center;z-index:1}
+    .centerInfo .introIcon{width:48px;height:48px;margin:0 auto 21px;border:1px solid #e9e9eb;border-radius:50%;display:grid;place-items:center;font-size:23px;color:#555}
+    .centerInfo h2{font-size:22px;letter-spacing:-.04em;line-height:1.2;font-weight:630;margin:0 0 9px}
+    .centerInfo p{font-size:13px;color:#89898f;line-height:1.6;margin:0}
+    .target{position:absolute;width:18px;height:18px;background:#007aff;border:4px solid white;border-radius:50%;outline:2px solid #007aff;transform:translate(-50%,-50%);box-shadow:0 0 0 12px rgba(0,122,255,.055);z-index:2;pointer-events:none}
+    .estimate{position:absolute;width:27px;height:27px;border:2px solid #171717;border-radius:50%;transform:translate(-50%,-50%);z-index:2;pointer-events:none;transition:left .13s linear,top .13s linear}
+    .estimate:after{content:"";position:absolute;left:10px;top:10px;width:3px;height:3px;background:#171717;border-radius:50%}
+    .infoStrip{display:flex;justify-content:space-between;gap:12px;padding:14px 20px;border-top:1px solid #f1f1f3;min-height:62px;align-items:center;flex-wrap:wrap}
+    .state{display:flex;align-items:center;gap:8px;color:#696970;font-size:12px;font-weight:600}
+    .led{height:7px;width:7px;border-radius:50%;background:#b4b4b9;flex-shrink:0}
+    .led.on{background:#30a46c}
+    .led.warn{background:#eeac3c}
+    .counter{color:#8a8a91;font-size:12px;font-variant-numeric:tabular-nums}
+    .controls{display:flex;gap:10px;justify-content:center;align-items:center;flex-wrap:wrap;padding:22px 20px 12px}
+    button{min-height:44px;border-radius:999px;border:1px solid #e4e4e7;padding:12px 20px;background:#fff;color:#171717;font-size:13px;font-weight:640;cursor:pointer;transition:background .15s;touch-action:manipulation}
+    button.primary{background:#171717;color:white;border-color:#171717;min-width:180px}
+    button:disabled{opacity:.42;cursor:not-allowed}
+    button:not(:disabled):active{transform:scale(.99)}
+    .message{text-align:center;color:#7c7c83;font-size:12px;min-height:34px;margin:0;padding:0 18px 12px;line-height:1.45}
+    .under{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:18px}
+    .panel{border:1px solid #e7e7ec;border-radius:20px;padding:19px;background:#fafafa}
+    .panel h3{font-size:13px;margin:0 0 10px;letter-spacing:-.015em}
+    .panel p{font-size:12px;line-height:1.65;color:#7d7d85;margin:0}
+    .setting{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px}
+    label{font-size:12px;color:#74747a}
+    select{color:#222;border:1px solid #dfdfe4;background:white;border-radius:9px;font-size:12px;padding:9px;max-width:145px}
+    .preview{position:relative;width:125px;height:94px;overflow:hidden;border-radius:13px;background:#eaeaec;margin:7px auto 0}
+    .preview video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+    .preview small{position:absolute;bottom:6px;left:7px;font-size:9px;color:white;background:rgba(0,0,0,.4);padding:4px 5px;border-radius:5px}
+    .metrics{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:0 18px 18px}
+    .metric{padding:20px;border:1px solid #eeeef0;border-radius:18px}
+    .metric strong{display:block;font-size:30px;letter-spacing:-.045em;font-variant-numeric:tabular-nums;margin-top:6px}
+    .metric span{font-size:11px;color:#77777d}
+    .notice{font-size:11px;color:#88888e;line-height:1.65;margin:18px 2px 0}
+    footer{display:flex;justify-content:center;gap:15px;margin-top:27px;font-size:10px;color:#a1a1a6;letter-spacing:.04em}
+    [hidden]{display:none!important}
+    @media(max-width:520px){.shell{padding:18px 12px 36px}header{margin-bottom:30px;padding:0 5px} .board{height:51vh;min-height:320px} .under{grid-template-columns:1fr}.workspace{border-radius:22px}.controls{padding-top:18px} .preview{margin:10px 0 0}.panel:nth-child(2){display:flex;justify-content:space-between;align-items:center;gap:12px}}
+    @media(prefers-reduced-motion:reduce){*,*:before,*:after{transition:none!important;animation:none!important}}
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header><div class="brand">Gaze Lab <small>01 / STUDY</small></div><div class="tag">Research prototype</div></header>
+    <div class="intro"><div class="eyebrow">Vision · Interaction</div><h1>Follow the point.</h1><p class="subtitle">Ön kamerayla deneysel bakış yönü testi. Önce 9 noktada kalibrasyon, ardından 5 bağımsız noktada hata ölçümü.</p></div>
+    <section class="workspace" aria-label="Göz takibi deney alanı">
+      <div class="board" id="board">
+        <div class="centerInfo" id="centerInfo"><div class="introIcon" aria-hidden="true">◎</div><h2>Gözlerinle kontrol et.</h2><p>iPhone'u göz hizasında sabit tut. Yüzüne dengeli ışık gelsin. Başlamak için kameraya izin ver.</p></div>
+        <div class="target" id="target" hidden aria-hidden="true"></div>
+        <div class="estimate" id="estimate" hidden aria-hidden="true"></div>
+      </div>
+      <div class="infoStrip"><div class="state"><i class="led" id="led"></i><span id="stateText">Kamera kapalı</span></div><div class="counter" id="counter" aria-live="polite">Hazır</div></div>
+      <div class="controls">
+        <button class="primary" id="start">Kamerayı başlat</button>
+        <button class="primary" id="calibrate" disabled hidden>9 nokta kalibrasyonu</button>
+        <button id="restart" hidden>Yeniden dene</button>
+        <button id="export" hidden>Sonucu indir</button>
+        <button id="stop" disabled hidden>Kamerayı kapat</button>
+      </div>
+      <p class="message" id="message" aria-live="polite">Fotoğraf veya video sunucuya gönderilmez. İşleme cihazında gerçekleşir.</p>
+      <div class="metrics" id="metrics" hidden>
+        <div class="metric"><span>Medyan konum hatası</span><strong id="median">—</strong><span>CSS pikseli · ölçüm alanında</span></div>
+        <div class="metric"><span>Ekran köşegeni oranı</span><strong id="percent">—</strong><span>5 bağımsız hedef üzerinden</span></div>
+      </div>
+    </section>
+    <div class="under">
+      <div class="panel"><h3>Test koşulları</h3><div class="setting"><label for="lighting">Aydınlatma</label><select id="lighting"><option value="daylight">Gün ışığı</option><option value="indoor" selected>İç mekân</option><option value="low">Az ışık</option></select></div><p>30–45 cm mesafe önerilir. Kalibrasyonda yalnızca mavi noktaya bak; dokunmana gerek yok. Test sırasında telefonu hareket ettirme.</p></div>
+      <div class="panel"><div><h3>Canlı kamera önizlemesi</h3><p>Yüzün tamamen kadrajda olmalı.</p></div><div class="preview"><video id="video" playsinline autoplay muted></video><small>Yalnızca cihazda</small></div></div>
+    </div>
+    <p class="notice">Deneysel prototip. Göz bebeği çapını veya klinik bakış doğruluğunu ölçmez. MediaPipe yüz/iris işaret noktalarından yaklaşık yön tahmini üretir; sonuçlar ışık, baş hareketi ve cihaza göre değişebilir. Model ve kod ilk kullanımda internetten yüklenir, kamera görüntüleri yüklenmez. Klinik veya tanısal amaçla kullanılmaz.</p>
+    <footer><span>GAZE LAB</span><span>V0.1 — WEB</span><span>ON-DEVICE PROCESSING</span></footer>
+  </main>
+  <script src="./app.js" defer></script>
+</body>
+</html>
