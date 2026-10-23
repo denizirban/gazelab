@@ -200,12 +200,14 @@ function finishResults(){
 function loop(now){
   if(!S.landmarker || !S.stream)return;
   try{
+    let fresh=false;
     // 15 FPS upper cap to reduce battery and UI blocking on iPhones.
     if(els.video.readyState>=2 && els.video.currentTime!==S.lastVideoTime && now-S.lastInfer>=65){
       const result=S.landmarker.detectForVideo(els.video,now);
       S.lastVideoTime=els.video.currentTime;S.lastInfer=now;
       const feature=getGazeFeature(result.faceLandmarks?.[0]);
       S.feature=feature;
+      fresh=!!feature;
       if(feature)S.lastSeen=now;
     }
     const found=!!S.feature && now-S.lastSeen<1000;
@@ -214,7 +216,7 @@ function loop(now){
     }
     if(S.phase==="calibration"||S.phase==="validation"){
       const elapsed=now-S.stepStart;
-      if(found && elapsed>=750 && S.samples.length<130)S.samples.push([...S.feature]);
+      if(found && fresh && elapsed>=750 && S.samples.length<130)S.samples.push([...S.feature]);
       if(elapsed>=2250 && S.samples.length>=5)completePoint();
       else if(elapsed>8500){
         stage("ready");setVisible(els.target,false);
