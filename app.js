@@ -14,7 +14,7 @@ const validation = [
 ];
 const S = { phase:"idle", stream:null, landmarker:null, raf:0, lastVideoTime:-1,
             feature:null, lastSeen:0, phaseStart:0, stepStart:0, step:0, samples:[],
-            train:[], test:[], model:null, result:null, lastInfer:0, issue:"",alignmentOK:false,alignedSince:0,headBaseline:null,headNow:null,game:null,gameLast:0,paintMode:null,paintPrev:null,paintSmooth:null,paintCenter:null,paintRange:null };
+            train:[], test:[], model:null, result:null, lastInfer:0, issue:"",alignmentOK:false,alignedSince:0,headBaseline:null,headNow:null,game:null,gameLast:0,gameGaze:null,gameLastSeen:0,paintMode:null,paintPrev:null,paintSmooth:null,paintCenter:null,paintRange:null };
 const clamp = (x,a,b) => Math.max(a,Math.min(b,x));
 function setMessage(message){els.message.textContent=message;}
 function setIndicator(ok,message,warn=false){els.led.className="led"+(ok?(warn?" warn":" on"):"");els.stateText.textContent=message;}
@@ -270,8 +270,8 @@ function loop(now){
       if(fresh&&moved()){stage("ready");setVisible(els.target,false);S.samples=[];S.headBaseline=null;S.alignedSince=0;S.alignmentOK=false;announce("Position changed","Realign your face and restart the test.");setMessage("Head movement detected. Calibration stopped to protect measurement quality.");}
       const elapsed=now-S.stepStart;
       if(found && fresh && elapsed>=750 && S.samples.length<130)S.samples.push([...S.feature]);
-      if(S.phase==="calibration"||S.phase==="validation")if(elapsed>=2250 && S.samples.length>=5)completePoint();
-      else if(elapsed>8500){
+      if((S.phase==="calibration"||S.phase==="validation") && elapsed>=2250 && S.samples.length>=5){completePoint();}
+      else if((S.phase==="calibration"||S.phase==="validation") && elapsed>8500){
         stage("ready");setVisible(els.target,false);
         announce("Face tracking interrupted.","Hold the phone steady, improve lighting and recalibrate.");
         setMessage("Not enough camera samples for this point.");S.samples=[];
@@ -281,7 +281,7 @@ function loop(now){
       }
     }
     if(S.phase==="paint"){tickPaint(fresh);}
-    if(S.phase==="game"){tickGame(now,found&&fresh);}
+    if(S.phase==="game"){tickGame(now,fresh);}
     if(S.phase==="results" && found && S.model){
       const q=S.model.predict(S.feature);place(els.estimate,clamp(q[0],.025,.975),clamp(q[1],.025,.975));
     }
@@ -298,12 +298,12 @@ const hoops=[[.22,.24],[.76,.28],[.48,.67],[.19,.75],[.78,.76],[.5,.22],[.28,.5]
 function startGame(){
  if(S.phase!=="results"||!S.model)return;
  S.game={score:0,shots:0,index:0,hold:0,started:performance.now(),duration:30000,wasInside:false};
- S.gameLast=performance.now();
+ S.gameLast=performance.now();S.gameGaze=null;S.gameLastSeen=0;
  stage("game");setVisible(els.metrics,false);setVisible(els.metricExtra,false);
  setVisible(els.centerInfo,false);setVisible(els.estimate,false);
  setVisible(els.gameHoop,true);setVisible(els.gameBall,true);
  place(els.gameHoop,...hoops[0]);place(els.gameBall,.5,.9);
- setMessage("The blue dot shows estimated gaze. Look at the green hoop and hold to score.");
+ setMessage("Blue dot = estimated gaze. Hold it inside the green ring for 0.55 seconds. Tracking may pause if eyes are lost.");
 }
 function endGame(){
  if(S.phase!=="game")return;
@@ -320,27 +320,37 @@ function tickGame(now,fresh){
  const remaining=Math.max(0,Math.ceil((g.duration-(now-g.started))/1000));
  if(remaining===0){endGame();return;}
  els.counter.textContent=g.score+" hoops · "+remaining+"s";
- if(!fresh||!S.feature){g.hold=0;g.wasInside=false;setIndicator(false,"Looking for eyes");return;}
- const q=S.model.predict(S.feature),target=hoops[g.index%hoops.length];
+ if(!fresh || !S.feature){
+  if(now-S.gameLastSeen>800){g.hold=0;g.wasInside=false;setIndicator(false,"Tracking paused · face camera");}
+  return;
+ }
+ const raw=S.model.predict(S.feature);
+ if(!raw.every(Number.isFinite))return;
+ S.gameLastSeen=now;
+ // Temporal low-pass filter prevents noisy single-frame jumps.
+ const alpha=.24;
+ S.gameGaze=S.gameGaze?S.gameGaze.map((v,i)=>v*(1-alpha)+raw[i]*alpha):raw;
+ const q=S.gameGaze,target=hoops[g.index%hoops.length];
  const board=els.board.getBoundingClientRect();
+ place(els.gameBall,clamp(q[0],.035,.965),clamp(q[1],.035,.965));
  const distance=Math.hypot((q[0]-target[0])*board.width,(q[1]-target[1])*board.height);
- place(els.gameBall,clamp(q[0],.03,.97),clamp(q[1],.03,.97));
- const inside=distance<Math.max(48,Math.min(board.width,board.height)*.16);
+ const inside=distance<Math.max(50,Math.min(board.width,board.height)*.18);
  if(inside){
   if(!g.wasInside)g.hold=now;
-  if(now-g.hold>650){
+  const held=now-g.hold;
+  setIndicator(true,"On target · "+Math.min(100,Math.round(held/550*100))+"%");
+  if(held>=550){
    g.score++;g.shots++;g.index++;
    place(els.gameHoop,...hoops[g.index%hoops.length]);
-   place(els.gameBall,...target);
    els.gameBall.classList.add("hit");
-   setTimeout(()=>{els.gameBall.classList.remove("hit");},230);
+   setTimeout(()=>els.gameBall.classList.remove("hit"),200);
    g.wasInside=false;g.hold=0;
-   setIndicator(true,"Nice shot");
-   return;
+   setIndicator(true,"Scored!");
   }
- }else g.hold=0;
- g.wasInside=inside;
- setIndicator(inside,inside?"Hold to shoot":"Find the hoop");
+ }else{
+  g.hold=0;g.wasInside=false;
+  setIndicator(true,"Tracking · look at the ring");
+ }
 }
 function beginPaint(mode){
  if(!S.landmarker||!S.stream)return;
@@ -372,13 +382,13 @@ function tickPaint(fresh){
  }
  if(!q.every(Number.isFinite))return;
  q=q.map(v=>clamp(v,.035,.965));
- S.paintSmooth=S.paintSmooth?S.paintSmooth.map((v,i)=>v*.68+q[i]*.32):q;
+ S.paintSmooth=S.paintSmooth?S.paintSmooth.map((v,i)=>v*.82+q[i]*.18):q;
  const [x,y]=S.paintSmooth;
  place(els.paintCursor,x,y);
  const rect=els.board.getBoundingClientRect(),ctx=els.paintCanvas.getContext("2d");
  if(S.paintPrev){
   const dx=(x-S.paintPrev[0])*rect.width,dy=(y-S.paintPrev[1])*rect.height;
-  if(Math.hypot(dx,dy)<Math.max(90,rect.width*.24)){
+  if(Math.hypot(dx,dy)<Math.max(55,rect.width*.15)){
    ctx.beginPath();ctx.moveTo(S.paintPrev[0]*rect.width,S.paintPrev[1]*rect.height);
    ctx.lineTo(x*rect.width,y*rect.height);ctx.lineWidth=2.5;ctx.strokeStyle="#007aff";ctx.lineCap="round";ctx.stroke();
   }
