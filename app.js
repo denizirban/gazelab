@@ -303,7 +303,7 @@ function startGame(){
  setVisible(els.centerInfo,false);setVisible(els.estimate,false);
  setVisible(els.gameHoop,true);setVisible(els.gameBall,true);
  place(els.gameHoop,...hoops[0]);place(els.gameBall,.5,.9);
- setMessage("Look at the green hoop and hold your gaze to shoot. No tapping.");
+ setMessage("The blue dot shows estimated gaze. Look at the green hoop and hold to score.");
 }
 function endGame(){
  if(S.phase!=="game")return;
@@ -320,11 +320,12 @@ function tickGame(now,fresh){
  const remaining=Math.max(0,Math.ceil((g.duration-(now-g.started))/1000));
  if(remaining===0){endGame();return;}
  els.counter.textContent=g.score+" hoops · "+remaining+"s";
- if(!fresh||!S.feature||moved()){g.hold=0;g.wasInside=false;setIndicator(false,"Hold your head still");return;}
+ if(!fresh||!S.feature){g.hold=0;g.wasInside=false;setIndicator(false,"Looking for eyes");return;}
  const q=S.model.predict(S.feature),target=hoops[g.index%hoops.length];
  const board=els.board.getBoundingClientRect();
  const distance=Math.hypot((q[0]-target[0])*board.width,(q[1]-target[1])*board.height);
- const inside=distance<Math.max(38,Math.min(board.width,board.height)*.115);
+ place(els.gameBall,clamp(q[0],.03,.97),clamp(q[1],.03,.97));
+ const inside=distance<Math.max(48,Math.min(board.width,board.height)*.16);
  if(inside){
   if(!g.wasInside)g.hold=now;
   if(now-g.hold>650){
@@ -332,7 +333,7 @@ function tickGame(now,fresh){
    place(els.gameHoop,...hoops[g.index%hoops.length]);
    place(els.gameBall,...target);
    els.gameBall.classList.add("hit");
-   setTimeout(()=>{els.gameBall.classList.remove("hit");if(S.phase==="game")place(els.gameBall,.5,.9);},230);
+   setTimeout(()=>{els.gameBall.classList.remove("hit");},230);
    g.wasInside=false;g.hold=0;
    setIndicator(true,"Nice shot");
    return;
