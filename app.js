@@ -1,7 +1,7 @@
 "use strict";
 // Gaze Lab V0.1 — coarse experimental gaze estimate. No image upload.
 const $ = (id) => document.getElementById(id);
-const els = Object.fromEntries(["board","centerInfo","target","estimate","start","calibrate","restart","stop","export","stateText","led","counter","message","video","lighting","metrics","median","percent"].map(id => [id,$(id)]));
+const els = Object.fromEntries(["board","centerInfo","target","estimate","start","calibrate","restart","stop","export","stateText","led","counter","message","video","lighting","metrics","median","percent","alignment","faceOval","alignmentText"].map(id => [id,$(id)]));
 const MODEL_URL = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
 const MP_BASE = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22-rc.20250304";
 const calibration = [
@@ -14,7 +14,7 @@ const validation = [
 ];
 const S = { phase:"idle", stream:null, landmarker:null, raf:0, lastVideoTime:-1,
             feature:null, lastSeen:0, phaseStart:0, stepStart:0, step:0, samples:[],
-            train:[], test:[], model:null, result:null, lastInfer:0, issue:"" };
+            train:[], test:[], model:null, result:null, lastInfer:0, issue:"",alignmentOK:false,alignedSince:0,headBaseline:null,headNow:null };
 const clamp = (x,a,b) => Math.max(a,Math.min(b,x));
 function setMessage(message){els.message.textContent=message;}
 function setIndicator(ok,message,warn=false){els.led.className="led"+(ok?(warn?" warn":" on"):"");els.stateText.textContent=message;}
@@ -26,7 +26,7 @@ function controls(){
   setVisible(els.export,S.phase==="results");
   setVisible(els.stop,S.phase!=="idle" && S.phase!=="error");
   els.start.disabled=S.phase==="loading";
-  els.calibrate.disabled=S.phase!=="ready";
+  els.calibrate.disabled=S.phase!=="ready" || !S.alignmentOK;
   els.stop.disabled=S.phase==="idle";
 }
 function place(el,x,y){el.style.left=(x*100)+"%";el.style.top=(y*100)+"%";}
@@ -36,7 +36,30 @@ function announce(heading,detail){
   els.centerInfo.querySelector("p").textContent=detail;
   setVisible(els.centerInfo,true);
 }
-function stage(phase){S.phase=phase;controls();}
+function stage(phase){S.phase=phase;setVisible(els.alignment,phase==="ready");controls();}
+function alignFace(lm,now){
+ let message="Position your face",ok=false,head=null;
+ if(lm&&lm.length>=478){
+  const a=lm[33],b=lm[263],n=lm[1],top=lm[10],chin=lm[152];
+  const x=(a.x+b.x)/2,y=(a.y+b.y)/2,w=Math.hypot(a.x-b.x,a.y-b.y);
+  const roll=Math.abs(Math.atan2(a.y-b.y,a.x-b.x)*180/Math.PI);
+  const h=Math.hypot(chin.x-top.x,chin.y-top.y);
+  head={x,y,w,roll};
+  if(w<.19||h<.30)message="Move closer";
+  else if(w>.46||h>.78)message="Move farther away";
+  else if(Math.abs(x-.5)>.13||y<.26||y>.55)message="Center your face";
+  else if(roll>12)message="Level your head";
+  else if(Math.abs(n.x-x)>w*.21)message="Face the camera";
+  else{ok=true;message="Hold still";}
+ }
+ if(ok){if(!S.alignedSince)S.alignedSince=now;}else S.alignedSince=0;
+ S.alignmentOK=ok&&now-S.alignedSince>=1600;
+ S.headNow=head;
+ els.alignmentText.textContent=S.alignmentOK?"Aligned · ready":message;
+ els.faceOval.classList.toggle("good",S.alignmentOK);
+ if(S.phase==="ready"){setIndicator(S.alignmentOK,S.alignmentOK?"Aligned":"Align your face");controls();}
+}
+function moved(){const a=S.headBaseline,b=S.headNow;return !a||!b||Math.abs(a.x-b.x)>.035||Math.abs(a.y-b.y)>.035||Math.abs(a.w-b.w)>.035||Math.abs(a.roll-b.roll)>7;}
 function releaseCamera(){
   if(S.raf) cancelAnimationFrame(S.raf);
   S.raf=0;
@@ -69,7 +92,7 @@ async function startCamera(){
       });
     }
     S.lastVideoTime=-1;S.lastInfer=0;
-    stage("ready");setIndicator(false,"Looking for face");
+    stage("ready");setIndicator(false,"Align your face");
     announce("Ready to calibrate.","Keep your face in frame, then begin the nine-point calibration.");
     els.counter.textContent="0 / 9";
     setMessage("Model ready. Start calibration when your face is detected.");
@@ -140,11 +163,11 @@ function fit(points){
   return {center,spread,coeff,predict,trainError};
 }
 function launchCalibrate(){
-  if(S.phase!=="ready")return;
+  if(S.phase!=="ready"||!S.alignmentOK)return;
   if(!S.feature || performance.now()-S.lastSeen>2000){
     setMessage("Make sure your face is visible, with even lighting and minimal movement.");return;
   }
-  S.step=0;S.train=[];S.test=[];S.result=null;S.model=null;S.samples=[];
+  S.headBaseline={...S.headNow};S.step=0;S.train=[];S.test=[];S.result=null;S.model=null;S.samples=[];
   setVisible(els.metrics,false);setVisible(els.estimate,false);setVisible(els.centerInfo,false);
   stage("calibration");beginPoint();
 }
@@ -185,14 +208,14 @@ function finishResults(){
   const sort=entries.map(p=>p.errorPx).sort((a,b)=>a-b);
   const median=sort[Math.floor(sort.length/2)];
   const percent=median/diag*100;
-  S.result={version:"0.1",method:"MediaPipe FaceLandmarker, iris-offset affine fit",capturedAt:new Date().toISOString(),
+  S.result={version:"0.2",method:"MediaPipe FaceLandmarker, iris-offset affine fit",capturedAt:new Date().toISOString(),
     lighting:els.lighting.value,calibration:S.train,validation:entries,
     boardCssPx:{width:board.width,height:board.height},
     medianErrorCssPx:median,medianErrorScreenDiagonalPercent:percent,
     disclaimer:"Experimental relative gaze estimate, not a clinical measurement. 5 holdout points."};
   stage("results");setVisible(els.target,false);setVisible(els.estimate,true);
   setVisible(els.metrics,true);els.median.textContent=Math.round(median)+" px";els.percent.textContent=percent.toFixed(1)+"%";
-  els.counter.textContent="9 kalibrasyon + 5 test";
+  els.counter.textContent="9 calibration + 5 checks";
   setIndicator(true,"Measurement complete");
   announce("Measurement complete.","The outlined circle shows estimated gaze. Keep your head steady and look around the screen.");
   setMessage("Experimental estimate based on five test points. Not clinically validated.");
@@ -205,6 +228,7 @@ function loop(now){
     if(els.video.readyState>=2 && els.video.currentTime!==S.lastVideoTime && now-S.lastInfer>=65){
       const result=S.landmarker.detectForVideo(els.video,now);
       S.lastVideoTime=els.video.currentTime;S.lastInfer=now;
+      alignFace(result.faceLandmarks?.[0],now);
       const feature=getGazeFeature(result.faceLandmarks?.[0]);
       S.feature=feature;
       fresh=!!feature;
@@ -212,9 +236,10 @@ function loop(now){
     }
     const found=!!S.feature && now-S.lastSeen<1000;
     if(S.phase==="ready"){
-      setIndicator(found,found?"Face detected":"Looking for face");
+      if(!found)setIndicator(false,"Looking for face");
     }
     if(S.phase==="calibration"||S.phase==="validation"){
+      if(fresh&&moved()){S.stepStart=now;S.samples=[];setMessage("Head moved. Hold still; restarting this point.");}
       const elapsed=now-S.stepStart;
       if(found && fresh && elapsed>=750 && S.samples.length<130)S.samples.push([...S.feature]);
       if(elapsed>=2250 && S.samples.length>=5)completePoint();
@@ -243,7 +268,7 @@ function restart(){
   if(S.phase==="results"||S.phase==="ready")launchCalibrate();
 }
 function stopCamera(){
-  releaseCamera();S.feature=null;S.model=null;S.result=null;
+  releaseCamera();S.feature=null;S.model=null;S.result=null;S.headBaseline=null;S.alignmentOK=false;S.alignedSince=0;
   stage("idle");setVisible(els.target,false);setVisible(els.estimate,false);setVisible(els.metrics,false);
   setIndicator(false,"Camera off");els.counter.textContent="Hazır";
   announce("Gözlerinle kontrol et.","Allow camera access to begin. Processing stays on your device.");
