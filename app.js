@@ -3,7 +3,7 @@
 const $ = (id) => document.getElementById(id);
 const els = Object.fromEntries(["board","centerInfo","target","estimate","start","calibrate","restart","stop","export","stateText","led","counter","message","video","lighting","metrics","median","percent"].map(id => [id,$(id)]));
 const MODEL_URL = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
-const MP_BASE = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22";
+const MP_BASE = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22-rc.20250304";
 const calibration = [
   [0.14,0.16],[0.5,0.16],[0.86,0.16],
   [0.14,0.50],[0.5,0.50],[0.86,0.50],
