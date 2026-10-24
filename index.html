@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="tr">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -7,6 +7,13 @@
   <meta name="description" content="Gaze Lab — telefon kamerasıyla deneysel 9 nokta göz takibi ölçümü.">
   <title>Gaze Lab — Eye Tracking Study</title>
   <style>
+    /* Compact, single-screen Apple-inspired study interface */
+    @media(min-width:700px){.shell{max-width:940px;padding-top:16px;padding-bottom:12px}header{margin-bottom:16px}.intro{margin-bottom:14px}.intro h1{font-size:42px}.board{height:clamp(245px,39vh,380px);min-height:245px}.under{margin-top:10px}.panel{padding:12px 16px}.notice{margin-top:10px}footer{margin-top:12px}.controls{padding:12px 16px 6px}.infoStrip{min-height:44px;padding:9px 16px}}
+    @media(max-width:699px){.shell{padding-top:12px;padding-bottom:16px}header{margin-bottom:15px}.intro{margin-bottom:14px}h1{font-size:36px}.board{height:clamp(290px,46dvh,430px);min-height:290px}.controls{padding:12px 12px 4px}.under{margin-top:10px}.panel{padding:14px}.notice{margin-top:12px}footer{margin-top:14px}}
+    .intro .subtitle{max-width:460px}
+    .workspace{box-shadow:none}
+    .tag{font-size:10px}
+
     :root { color-scheme:light; font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",Arial,sans-serif; background:#f5f5f7; color:#171717; font-synthesis:none; }
     *{box-sizing:border-box}
     body{margin:0;min-height:100%;-webkit-font-smoothing:antialiased}
@@ -66,32 +73,32 @@
 <body>
   <main class="shell">
     <header><div class="brand">Gaze Lab <small>01 / STUDY</small></div><div class="tag">Research prototype</div></header>
-    <div class="intro"><div class="eyebrow">Vision · Interaction</div><h1>Follow the point.</h1><p class="subtitle">Ön kamerayla deneysel bakış yönü testi. Önce 9 noktada kalibrasyon, ardından 5 bağımsız noktada hata ölçümü.</p></div>
+    <div class="intro"><div class="eyebrow">Vision · Interaction</div><h1>Follow the point.</h1><p class="subtitle">A simple gaze-tracking experiment. Nine calibration points. Five accuracy checks.</p></div>
     <section class="workspace" aria-label="Göz takibi deney alanı">
       <div class="board" id="board">
-        <div class="centerInfo" id="centerInfo"><div class="introIcon" aria-hidden="true">◎</div><h2>Gözlerinle kontrol et.</h2><p>iPhone'u göz hizasında sabit tut. Yüzüne dengeli ışık gelsin. Başlamak için kameraya izin ver.</p></div>
+        <div class="centerInfo" id="centerInfo"><div class="introIcon" aria-hidden="true">◎</div><h2>Control with your eyes.</h2><p>Keep your phone steady at eye level in even lighting. Enable the camera to begin.</p></div>
         <div class="target" id="target" hidden aria-hidden="true"></div>
         <div class="estimate" id="estimate" hidden aria-hidden="true"></div>
       </div>
-      <div class="infoStrip"><div class="state"><i class="led" id="led"></i><span id="stateText">Kamera kapalı</span></div><div class="counter" id="counter" aria-live="polite">Hazır</div></div>
+      <div class="infoStrip"><div class="state"><i class="led" id="led"></i><span id="stateText">Camera off</span></div><div class="counter" id="counter" aria-live="polite">Ready</div></div>
       <div class="controls">
-        <button class="primary" id="start">Kamerayı başlat</button>
-        <button class="primary" id="calibrate" disabled hidden>9 nokta kalibrasyonu</button>
-        <button id="restart" hidden>Yeniden dene</button>
-        <button id="export" hidden>Sonucu indir</button>
-        <button id="stop" disabled hidden>Kamerayı kapat</button>
+        <button class="primary" id="start">Start camera</button>
+        <button class="primary" id="calibrate" disabled hidden>Calibrate · 9 points</button>
+        <button id="restart" hidden>Try again</button>
+        <button id="export" hidden>Export results</button>
+        <button id="stop" disabled hidden>Stop camera</button>
       </div>
       <p class="message" id="message" aria-live="polite">Fotoğraf veya video sunucuya gönderilmez. İşleme cihazında gerçekleşir.</p>
       <div class="metrics" id="metrics" hidden>
-        <div class="metric"><span>Medyan konum hatası</span><strong id="median">—</strong><span>CSS pikseli · ölçüm alanında</span></div>
-        <div class="metric"><span>Ekran köşegeni oranı</span><strong id="percent">—</strong><span>5 bağımsız hedef üzerinden</span></div>
+        <div class="metric"><span>Median position error</span><strong id="median">—</strong><span>CSS pixels · test area</span></div>
+        <div class="metric"><span>Relative error</span><strong id="percent">—</strong><span>Across 5 independent targets</span></div>
       </div>
     </section>
     <div class="under">
-      <div class="panel"><h3>Test koşulları</h3><div class="setting"><label for="lighting">Aydınlatma</label><select id="lighting"><option value="daylight">Gün ışığı</option><option value="indoor" selected>İç mekân</option><option value="low">Az ışık</option></select></div><p>30–45 cm mesafe önerilir. Kalibrasyonda yalnızca mavi noktaya bak; dokunmana gerek yok. Test sırasında telefonu hareket ettirme.</p></div>
-      <div class="panel"><div><h3>Canlı kamera önizlemesi</h3><p>Yüzün tamamen kadrajda olmalı.</p></div><div class="preview"><video id="video" playsinline autoplay muted></video><small>Yalnızca cihazda</small></div></div>
+      <div class="panel"><h3>Test conditions</h3><div class="setting"><label for="lighting">Lighting</label><select id="lighting"><option value="daylight">Daylight</option><option value="indoor" selected>Indoor</option><option value="low">Low light</option></select></div><p>Hold 30–45 cm away. Look at each blue dot without touching the screen. Keep the phone still.</p></div>
+      <div class="panel"><div><h3>Live camera preview</h3><p>Keep your face in frame.</p></div><div class="preview"><video id="video" playsinline autoplay muted></video><small>On device</small></div></div>
     </div>
-    <p class="notice">Deneysel prototip. Göz bebeği çapını veya klinik bakış doğruluğunu ölçmez. MediaPipe yüz/iris işaret noktalarından yaklaşık yön tahmini üretir; sonuçlar ışık, baş hareketi ve cihaza göre değişebilir. Model ve kod ilk kullanımda internetten yüklenir, kamera görüntüleri yüklenmez. Klinik veya tanısal amaçla kullanılmaz.</p>
+    <p class="notice">Experimental prototype. Estimates approximate gaze direction from facial and iris landmarks, not pupil diameter. Accuracy depends on lighting, head movement and device. Model files load online; camera frames stay on your device. Not for clinical or diagnostic use.</p>
     <footer><span>GAZE LAB</span><span>V0.1 — WEB</span><span>ON-DEVICE PROCESSING</span></footer>
   </main>
   <script src="./app.js" defer></script>
