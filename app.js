@@ -1,7 +1,7 @@
 "use strict";
 // Gaze Lab V0.1 — coarse experimental gaze estimate. No image upload.
 const $ = (id) => document.getElementById(id);
-const els = Object.fromEntries(["board","centerInfo","target","estimate","start","calibrate","restart","stop","export","stateText","led","counter","message","video","lighting","metrics","median","percent","alignment","faceOval","alignmentText"].map(id => [id,$(id)]));
+const els = Object.fromEntries(["board","centerInfo","target","estimate","start","calibrate","restart","stop","export","stateText","led","counter","message","video","lighting","metrics","median","percent","alignment","faceOval","alignmentText","play","endGame","gameHoop","gameBall","metricExtra","horizontal","vertical","repeatability"].map(id => [id,$(id)]));
 const MODEL_URL = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
 const MP_BASE = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22-rc.20250304";
 const calibration = [
@@ -14,7 +14,7 @@ const validation = [
 ];
 const S = { phase:"idle", stream:null, landmarker:null, raf:0, lastVideoTime:-1,
             feature:null, lastSeen:0, phaseStart:0, stepStart:0, step:0, samples:[],
-            train:[], test:[], model:null, result:null, lastInfer:0, issue:"",alignmentOK:false,alignedSince:0,headBaseline:null,headNow:null };
+            train:[], test:[], model:null, result:null, lastInfer:0, issue:"",alignmentOK:false,alignedSince:0,headBaseline:null,headNow:null,game:null,gameLast:0 };
 const clamp = (x,a,b) => Math.max(a,Math.min(b,x));
 function setMessage(message){els.message.textContent=message;}
 function setIndicator(ok,message,warn=false){els.led.className="led"+(ok?(warn?" warn":" on"):"");els.stateText.textContent=message;}
@@ -23,7 +23,9 @@ function controls(){
   setVisible(els.start,S.phase==="idle" || S.phase==="error");
   setVisible(els.calibrate,S.phase==="ready");
   setVisible(els.restart,S.phase==="results" || S.phase==="ready");
-  setVisible(els.export,S.phase==="results");
+  setVisible(els.export,S.phase==="results"||S.phase==="game");
+  setVisible(els.play,S.phase==="results");
+  setVisible(els.endGame,S.phase==="game");
   setVisible(els.stop,S.phase!=="idle" && S.phase!=="error");
   els.start.disabled=S.phase==="loading";
   els.calibrate.disabled=S.phase!=="ready" || !S.alignmentOK;
@@ -215,22 +217,29 @@ function finishResults(){
   const entries=S.test.map(p=>{
     const q=S.model.predict(p.feature);
     const px=Math.hypot((q[0]-p.target[0])*board.width,(q[1]-p.target[1])*board.height);
-    return {target:p.target,estimate:q,errorPx:px,errorScreenPercent:px/diag*100,sampleCount:p.sampleCount};
+    return {target:p.target,estimate:q,errorPx:px,errorScreenPercent:px/diag*100,errorXPx:Math.abs(q[0]-p.target[0])*board.width,errorYPx:Math.abs(q[1]-p.target[1])*board.height,sampleCount:p.sampleCount};
   });
   const sort=entries.map(p=>p.errorPx).sort((a,b)=>a-b);
   const median=sort[Math.floor(sort.length/2)];
   const percent=median/diag*100;
-  S.result={version:"0.2",method:"MediaPipe FaceLandmarker, iris-offset affine fit",capturedAt:new Date().toISOString(),
+  const mean=key=>entries.reduce((total,e)=>total+e[key],0)/entries.length;
+  const horizontal=mean("errorXPx"),vertical=mean("errorYPx");
+  const repeatability=null; // Requires multiple complete runs in controlled conditions.
+  S.result={version:"0.3",horizontalMAECssPx:horizontal,verticalMAECssPx:vertical,repeatabilityAcrossSessions:repeatability,method:"MediaPipe FaceLandmarker, iris-offset affine fit",capturedAt:new Date().toISOString(),
     lighting:els.lighting.value,calibration:S.train,validation:entries,
     boardCssPx:{width:board.width,height:board.height},
     medianErrorCssPx:median,medianErrorScreenDiagonalPercent:percent,
     disclaimer:"Experimental relative gaze estimate, not a clinical measurement. 5 holdout points."};
   stage("results");setVisible(els.target,false);setVisible(els.estimate,true);
-  setVisible(els.metrics,true);els.median.textContent=Math.round(median)+" px";els.percent.textContent=percent.toFixed(1)+"%";
+  setVisible(els.metrics,true);setVisible(els.metricExtra,true);
+  els.horizontal.textContent=Math.round(horizontal)+" px";
+  els.vertical.textContent=Math.round(vertical)+" px";
+  els.repeatability.textContent="Not tested";
+  els.median.textContent=Math.round(median)+" px";els.percent.textContent=percent.toFixed(1)+"%";
   els.counter.textContent="9 calibration + 5 checks";
   setIndicator(true,"Measurement complete");
   announce("Measurement complete.","The outlined circle shows estimated gaze. Keep your head steady and look around the screen.");
-  setMessage("Experimental estimate based on five test points. Not clinically validated.");
+  setMessage("Five held-out points. Horizontal and vertical MAE are separate. Play Eye Hoops using gaze dwell.");
 }
 function loop(now){
   if(!S.landmarker || !S.stream)return;
@@ -264,6 +273,7 @@ function loop(now){
         setIndicator(true,"Looking for signal",true);
       }
     }
+    if(S.phase==="game"){tickGame(now,found&&fresh);}
     if(S.phase==="results" && found && S.model){
       const q=S.model.predict(S.feature);place(els.estimate,clamp(q[0],.025,.975),clamp(q[1],.025,.975));
     }
@@ -276,12 +286,59 @@ function loop(now){
   }
   S.raf=requestAnimationFrame(loop);
 }
+const hoops=[[.22,.24],[.76,.28],[.48,.67],[.19,.75],[.78,.76],[.5,.22],[.28,.5],[.72,.55]];
+function startGame(){
+ if(S.phase!=="results"||!S.model)return;
+ S.game={score:0,shots:0,index:0,hold:0,started:performance.now(),duration:30000,wasInside:false};
+ S.gameLast=performance.now();
+ stage("game");setVisible(els.metrics,false);setVisible(els.metricExtra,false);
+ setVisible(els.centerInfo,false);setVisible(els.estimate,false);
+ setVisible(els.gameHoop,true);setVisible(els.gameBall,true);
+ place(els.gameHoop,...hoops[0]);place(els.gameBall,.5,.9);
+ setMessage("Look at the green hoop and hold your gaze to shoot. No tapping.");
+}
+function endGame(){
+ if(S.phase!=="game")return;
+ const g=S.game;
+ S.result.game={name:"Eye Hoops",score:g.score,attempts:g.shots,durationSeconds:30,completedAt:new Date().toISOString()};
+ setVisible(els.gameHoop,false);setVisible(els.gameBall,false);
+ stage("results");setVisible(els.metrics,true);setVisible(els.metricExtra,true);
+ announce("Eye Hoops complete",g.score+" hoops scored in 30 seconds. Play again after recalibrating.");
+ setMessage("Game performance depends on gaze tracking error. Not a clinical measure.");
+ els.counter.textContent=g.score+" hoops";
+}
+function tickGame(now,fresh){
+ const g=S.game;if(!g)return;
+ const remaining=Math.max(0,Math.ceil((g.duration-(now-g.started))/1000));
+ if(remaining===0){endGame();return;}
+ els.counter.textContent=g.score+" hoops · "+remaining+"s";
+ if(!fresh||!S.feature||moved()){g.hold=0;g.wasInside=false;setIndicator(false,"Hold your head still");return;}
+ const q=S.model.predict(S.feature),target=hoops[g.index%hoops.length];
+ const board=els.board.getBoundingClientRect();
+ const distance=Math.hypot((q[0]-target[0])*board.width,(q[1]-target[1])*board.height);
+ const inside=distance<Math.max(38,Math.min(board.width,board.height)*.115);
+ if(inside){
+  if(!g.wasInside)g.hold=now;
+  if(now-g.hold>650){
+   g.score++;g.shots++;g.index++;
+   place(els.gameHoop,...hoops[g.index%hoops.length]);
+   place(els.gameBall,...target);
+   els.gameBall.classList.add("hit");
+   setTimeout(()=>{els.gameBall.classList.remove("hit");if(S.phase==="game")place(els.gameBall,.5,.9);},230);
+   g.wasInside=false;g.hold=0;
+   setIndicator(true,"Nice shot");
+   return;
+  }
+ }else g.hold=0;
+ g.wasInside=inside;
+ setIndicator(inside,inside?"Hold to shoot":"Find the hoop");
+}
 function restart(){
-  if(S.phase==="results"||S.phase==="ready")launchCalibrate();
+  if(S.phase==="results"||S.phase==="ready"){if(S.phase==="results"){stage("ready");S.alignedSince=0;S.alignmentOK=false;}launchCalibrate();}
 }
 function stopCamera(){
   releaseCamera();S.feature=null;S.model=null;S.result=null;S.headBaseline=null;S.alignmentOK=false;S.alignedSince=0;
-  stage("idle");setVisible(els.target,false);setVisible(els.estimate,false);setVisible(els.metrics,false);
+  stage("idle");setVisible(els.target,false);setVisible(els.estimate,false);setVisible(els.metrics,false);setVisible(els.metricExtra,false);setVisible(els.gameHoop,false);setVisible(els.gameBall,false);
   setIndicator(false,"Camera off");els.counter.textContent="Hazır";
   announce("Gözlerinle kontrol et.","Allow camera access to begin. Processing stays on your device.");
   setMessage("Camera stopped. No images were saved.");
@@ -298,6 +355,8 @@ els.calibrate.addEventListener("click",launchCalibrate);
 els.restart.addEventListener("click",restart);
 els.stop.addEventListener("click",stopCamera);
 els.export.addEventListener("click",exportResult);
+els.play.addEventListener("click",startGame);
+els.endGame.addEventListener("click",endGame);
 window.addEventListener("pagehide",releaseCamera);
 window.addEventListener("orientationchange",()=>{if(S.phase==="calibration"||S.phase==="validation"){stage("ready");setVisible(els.target,false);announce("Screen orientation changed.","Calibration ölçümleri iptal edildi. Yeniden deneyebilirsin.");setMessage("Screen orientation changed; restart the test.");}});
 controls();
