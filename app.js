@@ -239,10 +239,10 @@ function loop(now){
       if(!found)setIndicator(false,"Looking for face");
     }
     if(S.phase==="calibration"||S.phase==="validation"){
-      if(fresh&&moved()){S.stepStart=now;S.samples=[];setMessage("Head moved. Hold still; restarting this point.");}
+      if(fresh&&moved()){stage("ready");setVisible(els.target,false);S.samples=[];S.headBaseline=null;S.alignedSince=0;S.alignmentOK=false;announce("Position changed","Realign your face and restart the test.");setMessage("Head movement detected. Calibration stopped to protect measurement quality.");}
       const elapsed=now-S.stepStart;
       if(found && fresh && elapsed>=750 && S.samples.length<130)S.samples.push([...S.feature]);
-      if(elapsed>=2250 && S.samples.length>=5)completePoint();
+      if(S.phase==="calibration"||S.phase==="validation")if(elapsed>=2250 && S.samples.length>=5)completePoint();
       else if(elapsed>8500){
         stage("ready");setVisible(els.target,false);
         announce("Face tracking interrupted.","Hold the phone steady, improve lighting and recalibrate.");
