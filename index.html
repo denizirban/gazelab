@@ -27,6 +27,8 @@
     .metricExtra>div{border:1px solid #eeeef0;border-radius:14px;padding:12px;font-size:11px;color:#777}
     .metricExtra strong{display:block;font-size:19px;color:#171717;margin-top:4px}
     @media(max-width:520px){.metricExtra{gap:5px}.metricExtra>div{padding:9px}}
+.paintCanvas{position:absolute;inset:0;width:100%;height:100%;z-index:2;pointer-events:none}
+.paintCursor{position:absolute;width:15px;height:15px;border:2px solid #007aff;border-radius:50%;background:#007aff33;transform:translate(-50%,-50%);z-index:3;pointer-events:none}
     .intro .subtitle{max-width:460px}
     .workspace{box-shadow:none}
     .tag{font-size:10px}
@@ -95,14 +97,14 @@
       <div class="board" id="board">
         <div class="alignment" id="alignment" hidden><div class="faceOval" id="faceOval"><span class="eyeGuide"></span></div><div class="alignmentText" id="alignmentText">Position your face</div></div><div class="centerInfo" id="centerInfo"><div class="introIcon" aria-hidden="true">◎</div><h2>Control with your eyes.</h2><p>Keep your phone steady at eye level in even lighting. Enable the camera to begin.</p></div>
         <div class="target" id="target" hidden aria-hidden="true"></div>
-        <div class="estimate" id="estimate" hidden aria-hidden="true"></div><div class="gameHoop" id="gameHoop" hidden></div><div class="gameBall" id="gameBall" hidden></div>
+        <div class="estimate" id="estimate" hidden aria-hidden="true"></div><div class="gameHoop" id="gameHoop" hidden></div><div class="gameBall" id="gameBall" hidden></div><canvas class="paintCanvas" id="paintCanvas" hidden></canvas><div class="paintCursor" id="paintCursor" hidden></div>
       </div>
       <div class="infoStrip"><div class="state"><i class="led" id="led"></i><span id="stateText">Camera off</span></div><div class="counter" id="counter" aria-live="polite">Ready</div></div>
       <div class="controls">
         <button class="primary" id="start">Start camera</button>
         <button class="primary" id="calibrate" disabled hidden>Calibrate · 9 points</button>
         <button id="restart" hidden>Try again</button>
-        <button id="export" hidden>Export results</button><button class="primary" id="play" hidden>Play · Eye Hoops</button><button id="endGame" hidden>End game</button>
+        <button id="export" hidden>Export results</button><button class="primary" id="play" hidden>Play · Eye Hoops</button><button id="endGame" hidden>End game</button><button class="primary" id="instantPaint" hidden>Instant Paint</button><button class="primary" id="calibratedPaint" hidden>Calibrated Paint</button><button id="clearPaint" hidden>Clear</button><button id="endPaint" hidden>Done</button>
         <button id="stop" disabled hidden>Stop camera</button>
       </div>
       <p class="message" id="message" aria-live="polite">Camera frames stay on your device.</p>
@@ -116,7 +118,7 @@
       <div class="panel"><div><h3>Live camera preview</h3><p>Keep your face in frame.</p></div><div class="preview"><video id="video" playsinline autoplay muted></video><small>On device</small></div></div>
     </div>
     <p class="notice">Experimental prototype. Estimates approximate gaze direction from facial and iris landmarks, not pupil diameter. Accuracy depends on lighting, head movement and device. Model files load online; camera frames stay on your device. Not for clinical or diagnostic use.</p>
-    <footer><span>GAZE LAB</span><span>V0.3 — WEB</span><span>ON-DEVICE PROCESSING</span></footer>
+    <footer><span>GAZE LAB</span><span>V0.4 — WEB</span><span>ON-DEVICE PROCESSING</span></footer>
   </main>
   <script src="./app.js" defer></script>
 </body>
