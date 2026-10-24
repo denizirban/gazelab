@@ -20,6 +20,13 @@
     /* Compact, single-screen Apple-inspired study interface */
     @media(min-width:700px){.shell{max-width:940px;padding-top:16px;padding-bottom:12px}header{margin-bottom:16px}.intro{margin-bottom:14px}.intro h1{font-size:42px}.board{height:clamp(245px,39vh,380px);min-height:245px}.under{margin-top:10px}.panel{padding:12px 16px}.notice{margin-top:10px}footer{margin-top:12px}.controls{padding:12px 16px 6px}.infoStrip{min-height:44px;padding:9px 16px}}
     @media(max-width:699px){.shell{padding-top:12px;padding-bottom:16px}header{margin-bottom:15px}.intro{margin-bottom:14px}h1{font-size:36px}.board{height:clamp(290px,46dvh,430px);min-height:290px}.controls{padding:12px 12px 4px}.under{margin-top:10px}.panel{padding:14px}.notice{margin-top:12px}footer{margin-top:14px}}
+    .gameBall{position:absolute;width:28px;height:28px;border-radius:50%;background:#007aff;transform:translate(-50%,-50%);box-shadow:0 6px 20px #007aff33;z-index:2;pointer-events:none}
+    .gameHoop{position:absolute;width:60px;height:60px;border:4px solid #30a46c;border-radius:50%;transform:translate(-50%,-50%);box-shadow:0 0 0 8px #30a46c12;z-index:2;pointer-events:none}
+    .gameBall.hit{background:#30a46c}
+    .metricExtra{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:0 18px 18px}
+    .metricExtra>div{border:1px solid #eeeef0;border-radius:14px;padding:12px;font-size:11px;color:#777}
+    .metricExtra strong{display:block;font-size:19px;color:#171717;margin-top:4px}
+    @media(max-width:520px){.metricExtra{gap:5px}.metricExtra>div{padding:9px}}
     .intro .subtitle{max-width:460px}
     .workspace{box-shadow:none}
     .tag{font-size:10px}
@@ -84,32 +91,32 @@
   <main class="shell">
     <header><div class="brand">Gaze Lab <small>01 / STUDY</small></div><div class="tag">Research prototype</div></header>
     <div class="intro"><div class="eyebrow">Vision · Interaction</div><h1>Follow the point.</h1><p class="subtitle">A simple gaze-tracking experiment. Nine calibration points. Five accuracy checks.</p></div>
-    <section class="workspace" aria-label="Göz takibi deney alanı">
+    <section class="workspace" aria-label="Gaze tracking study area">
       <div class="board" id="board">
         <div class="alignment" id="alignment" hidden><div class="faceOval" id="faceOval"><span class="eyeGuide"></span></div><div class="alignmentText" id="alignmentText">Position your face</div></div><div class="centerInfo" id="centerInfo"><div class="introIcon" aria-hidden="true">◎</div><h2>Control with your eyes.</h2><p>Keep your phone steady at eye level in even lighting. Enable the camera to begin.</p></div>
         <div class="target" id="target" hidden aria-hidden="true"></div>
-        <div class="estimate" id="estimate" hidden aria-hidden="true"></div>
+        <div class="estimate" id="estimate" hidden aria-hidden="true"></div><div class="gameHoop" id="gameHoop" hidden></div><div class="gameBall" id="gameBall" hidden></div>
       </div>
       <div class="infoStrip"><div class="state"><i class="led" id="led"></i><span id="stateText">Camera off</span></div><div class="counter" id="counter" aria-live="polite">Ready</div></div>
       <div class="controls">
         <button class="primary" id="start">Start camera</button>
         <button class="primary" id="calibrate" disabled hidden>Calibrate · 9 points</button>
         <button id="restart" hidden>Try again</button>
-        <button id="export" hidden>Export results</button>
+        <button id="export" hidden>Export results</button><button class="primary" id="play" hidden>Play · Eye Hoops</button><button id="endGame" hidden>End game</button>
         <button id="stop" disabled hidden>Stop camera</button>
       </div>
-      <p class="message" id="message" aria-live="polite">Fotoğraf veya video sunucuya gönderilmez. İşleme cihazında gerçekleşir.</p>
+      <p class="message" id="message" aria-live="polite">Camera frames stay on your device.</p>
       <div class="metrics" id="metrics" hidden>
         <div class="metric"><span>Median position error</span><strong id="median">—</strong><span>CSS pixels · test area</span></div>
         <div class="metric"><span>Relative error</span><strong id="percent">—</strong><span>Across 5 independent targets</span></div>
-      </div>
+      </div><div class="metricExtra" id="metricExtra" hidden><div>Horizontal MAE<strong id="horizontal">—</strong></div><div>Vertical MAE<strong id="vertical">—</strong></div><div>Repeatability<strong id="repeatability">—</strong></div></div>
     </section>
     <div class="under">
       <div class="panel"><h3>Test conditions</h3><div class="setting"><label for="lighting">Lighting</label><select id="lighting"><option value="daylight">Daylight</option><option value="indoor" selected>Indoor</option><option value="low">Low light</option></select></div><p>Hold 30–45 cm away. Look at each blue dot without touching the screen. Keep the phone still.</p></div>
       <div class="panel"><div><h3>Live camera preview</h3><p>Keep your face in frame.</p></div><div class="preview"><video id="video" playsinline autoplay muted></video><small>On device</small></div></div>
     </div>
     <p class="notice">Experimental prototype. Estimates approximate gaze direction from facial and iris landmarks, not pupil diameter. Accuracy depends on lighting, head movement and device. Model files load online; camera frames stay on your device. Not for clinical or diagnostic use.</p>
-    <footer><span>GAZE LAB</span><span>V0.1 — WEB</span><span>ON-DEVICE PROCESSING</span></footer>
+    <footer><span>GAZE LAB</span><span>V0.3 — WEB</span><span>ON-DEVICE PROCESSING</span></footer>
   </main>
   <script src="./app.js" defer></script>
 </body>
