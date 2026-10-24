@@ -334,13 +334,13 @@ function tickGame(now,fresh){
  setIndicator(inside,inside?"Hold to shoot":"Find the hoop");
 }
 function restart(){
-  if(S.phase==="results"||S.phase==="ready"){if(S.phase==="results"){stage("ready");S.alignedSince=0;S.alignmentOK=false;}launchCalibrate();}
+  if(S.phase==="results"||S.phase==="ready"){stage("ready");S.alignedSince=0;S.alignmentOK=false;S.headBaseline=null;setVisible(els.metrics,false);setVisible(els.metricExtra,false);setVisible(els.estimate,false);setMessage("Align your face to begin a new calibration.");}
 }
 function stopCamera(){
   releaseCamera();S.feature=null;S.model=null;S.result=null;S.headBaseline=null;S.alignmentOK=false;S.alignedSince=0;
   stage("idle");setVisible(els.target,false);setVisible(els.estimate,false);setVisible(els.metrics,false);setVisible(els.metricExtra,false);setVisible(els.gameHoop,false);setVisible(els.gameBall,false);
-  setIndicator(false,"Camera off");els.counter.textContent="Hazır";
-  announce("Gözlerinle kontrol et.","Allow camera access to begin. Processing stays on your device.");
+  setIndicator(false,"Camera off");els.counter.textContent="Ready";
+  announce("Control with your eyes.","Allow camera access to begin. Processing stays on your device.");
   setMessage("Camera stopped. No images were saved.");
 }
 function exportResult(){
