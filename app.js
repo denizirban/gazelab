@@ -46,12 +46,14 @@ const cameraPreview=els.video.parentElement;
 const previewHome=cameraPreview.parentElement;
 function stage(phase){
  S.phase=phase;
- if(phase==="ready"){
-  els.board.prepend(cameraPreview);
-  setVisible(els.centerInfo,false);
+ // iOS Safari can stall the video when its DOM node is reparented.
+ // Keep the live video mounted in one place for the entire camera session.
+ if(phase==="idle"||phase==="error"){
+  if(cameraPreview.parentElement!==previewHome)previewHome.append(cameraPreview);
  }else{
-  previewHome.append(cameraPreview);
+  if(cameraPreview.parentElement!==els.board)els.board.prepend(cameraPreview);
  }
+ if(phase==="ready")setVisible(els.centerInfo,false);
  setVisible(els.alignment,phase==="ready");
  controls();
 }
@@ -250,6 +252,7 @@ function loop(now){
   try{
     let fresh=false;
     // 15 FPS upper cap to reduce battery and UI blocking on iPhones.
+    if(els.video.paused && S.stream && els.video.readyState>=2){els.video.play().catch(()=>{});}
     if(els.video.readyState>=2 && els.video.currentTime!==S.lastVideoTime && now-S.lastInfer>=65){
       const result=S.landmarker.detectForVideo(els.video,now);
       S.lastVideoTime=els.video.currentTime;S.lastInfer=now;
@@ -358,7 +361,7 @@ function beginPaint(mode){
  els.counter.textContent="Eye Paint";
 }
 function tickPaint(fresh){
- if(!fresh||!S.feature){S.paintPrev=null;setIndicator(false,"Eyes not detected");return;}
+ if(!fresh||!S.feature){S.paintPrev=null;setIndicator(false,els.video.paused?"Camera paused":(performance.now()-S.lastSeen>1100?"Eyes not detected":"Tracking…"));return;}
  let q;
  if(S.paintMode==="calibrated")q=S.model.predict(S.feature);
  else{
