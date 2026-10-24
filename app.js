@@ -45,9 +45,9 @@ function releaseCamera(){
   if(S.landmarker){try{S.landmarker.close();}catch(_){/* ignored */}S.landmarker=null;}
 }
 async function startCamera(){
-  if(!navigator.mediaDevices?.getUserMedia){setMessage("Tarayıcı kamerayı desteklemiyor. iPhone Safari ve HTTPS bağlantısı kullan.");return;}
-  stage("loading");setIndicator(false,"Kamera hazırlanıyor");els.start.hidden=true;
-  announce("Kamera hazırlanıyor","Kamera izni ve göz algılama modeli yükleniyor.");
+  if(!navigator.mediaDevices?.getUserMedia){setMessage("Camera unavailable. Use a modern browser over HTTPS.");return;}
+  stage("loading");setIndicator(false,"Preparing camera");els.start.hidden=true;
+  announce("Preparing camera","Loading camera and eye tracking model.");
   try {
     // Request permission immediately from the user gesture on iOS.
     const stream=await navigator.mediaDevices.getUserMedia({
@@ -69,16 +69,16 @@ async function startCamera(){
       });
     }
     S.lastVideoTime=-1;S.lastInfer=0;
-    stage("ready");setIndicator(false,"Yüz aranıyor");
-    announce("Kalibrasyona hazır.","Kamera önizlemesinde yüzün görünüyorsa dokuz noktalı teste başlayabilirsin.");
+    stage("ready");setIndicator(false,"Looking for face");
+    announce("Ready to calibrate.","Keep your face in frame, then begin the nine-point calibration.");
     els.counter.textContent="0 / 9";
-    setMessage("Model yüklendi. Yüz algılandığında kalibrasyonu başlat.");
+    setMessage("Model ready. Start calibration when your face is detected.");
     S.raf=requestAnimationFrame(loop);
   }catch(err){
     releaseCamera();stage("error");
-    setIndicator(false,"Kamera başlatılamadı");
-    announce("Kamera açılamadı","Safari'de kamera iznini kontrol et ve sayfayı yenile.");
-    setMessage("Kamera veya model yüklenemedi: "+(err?.message||"Bilinmeyen hata")+". HTTPS ve internet bağlantısını kontrol et.");
+    setIndicator(false,"Camera unavailable");
+    announce("Could not open camera","Check camera permissions in your browser and reload.");
+    setMessage("Camera or model could not load: "+(err?.message||"Unknown error")+". Check HTTPS and your internet connection.");
   }
 }
 function getGazeFeature(lm){
@@ -110,7 +110,7 @@ function solve(A,B){
   const M=A.map((row,i)=>[...row,B[i]]);
   for(let c=0;c<3;c++){
     let pivot=c;for(let r=c+1;r<3;r++)if(Math.abs(M[r][c])>Math.abs(M[pivot][c]))pivot=r;
-    if(Math.abs(M[pivot][c])<1e-10)throw new Error("Kalibrasyon matrisi çözülemedi");
+    if(Math.abs(M[pivot][c])<1e-10)throw new Error("Calibration matrisi çözülemedi");
     [M[c],M[pivot]]=[M[pivot],M[c]];
     const scale=M[c][c];for(let k=c;k<4;k++)M[c][k]/=scale;
     for(let r=0;r<3;r++)if(r!==c){const q=M[r][c];for(let k=c;k<4;k++)M[r][k]-=q*M[c][k];}
@@ -136,13 +136,13 @@ function fit(points){
   const trainError=points.reduce((sum,p)=>{
     const q=predict(p.feature);return sum+Math.hypot(q[0]-p.target[0],q[1]-p.target[1]);
   },0)/points.length;
-  if(!Number.isFinite(trainError)||trainError>.50)throw new Error("Bakış sinyali kalibrasyon için kararsız");
+  if(!Number.isFinite(trainError)||trainError>.50)throw new Error("Gaze signal is too unstable for calibration");
   return {center,spread,coeff,predict,trainError};
 }
 function launchCalibrate(){
   if(S.phase!=="ready")return;
   if(!S.feature || performance.now()-S.lastSeen>2000){
-    setMessage("Önce kamerada yüzünü net göster. Başın sabit, ışık dengeli olsun.");return;
+    setMessage("Make sure your face is visible, with even lighting and minimal movement.");return;
   }
   S.step=0;S.train=[];S.test=[];S.result=null;S.model=null;S.samples=[];
   setVisible(els.metrics,false);setVisible(els.estimate,false);setVisible(els.centerInfo,false);
@@ -155,8 +155,8 @@ function beginPoint(){
   const target=list[S.step];
   place(els.target,target[0],target[1]);setVisible(els.target,true);
   els.counter.textContent=(S.step+1)+" / "+list.length;
-  setIndicator(true,isCalib?"Kalibrasyon":"Doğruluk testi");
-  setMessage(isCalib?"Sadece mavi noktaya bak. Dokunma.":"Yeni noktaya bak; bu noktalar kalibrasyon için kullanılmıyor.");
+  setIndicator(true,isCalib?"Calibration":"Accuracy check");
+  setMessage(isCalib?"Look at the blue dot. Do not tap.":"Look at each new dot. These targets were not used for calibration.");
 }
 function completePoint(){
   const target=(S.phase==="calibration"?calibration:validation)[S.step];
@@ -168,7 +168,7 @@ function completePoint(){
   if(S.phase==="calibration"){
     try{S.model=fit(S.train);}catch(err){
       stage("ready");setVisible(els.target,false);
-      announce("Kalibrasyon tekrarlanmalı.","Kamera açısını ve ışığı kontrol edip yeniden deneyebilirsin.");
+      announce("Calibration tekrarlanmalı.","Adjust your lighting and camera angle, then try again.");
       setMessage(err.message);return;
     }
     stage("validation");S.step=0;beginPoint();
@@ -193,9 +193,9 @@ function finishResults(){
   stage("results");setVisible(els.target,false);setVisible(els.estimate,true);
   setVisible(els.metrics,true);els.median.textContent=Math.round(median)+" px";els.percent.textContent=percent.toFixed(1)+"%";
   els.counter.textContent="9 kalibrasyon + 5 test";
-  setIndicator(true,"Ölçüm tamamlandı");
-  announce("İlk ölçüm tamam.","İçi boş halka, kameradan tahmin edilen yaklaşık bakış konumunu gösterir. Başını sabit tutarak ekranın farklı yerlerine bakabilirsin.");
-  setMessage("Bu bir başlangıç hata ölçümüdür. 5 test noktasıyla klinik doğruluk iddiası yapılamaz.");
+  setIndicator(true,"Measurement complete");
+  announce("Measurement complete.","The outlined circle shows estimated gaze. Keep your head steady and look around the screen.");
+  setMessage("Experimental estimate based on five test points. Not clinically validated.");
 }
 function loop(now){
   if(!S.landmarker || !S.stream)return;
@@ -212,7 +212,7 @@ function loop(now){
     }
     const found=!!S.feature && now-S.lastSeen<1000;
     if(S.phase==="ready"){
-      setIndicator(found,found?"Yüz algılandı":"Yüz aranıyor");
+      setIndicator(found,found?"Face detected":"Looking for face");
     }
     if(S.phase==="calibration"||S.phase==="validation"){
       const elapsed=now-S.stepStart;
@@ -220,11 +220,11 @@ function loop(now){
       if(elapsed>=2250 && S.samples.length>=5)completePoint();
       else if(elapsed>8500){
         stage("ready");setVisible(els.target,false);
-        announce("Yüz izleme kesildi.","Telefonu sabitle, daha iyi aydınlatma dene ve yeniden kalibre et.");
-        setMessage("Bu nokta için yeterli kamera örneği alınamadı.");S.samples=[];
+        announce("Face tracking interrupted.","Hold the phone steady, improve lighting and recalibrate.");
+        setMessage("Not enough camera samples for this point.");S.samples=[];
       }else if(elapsed>3000 && S.samples.length<5){
-        setMessage("Gözlerin algılanamıyor. Kameraya biraz yaklaş, yüzünü gölgede bırakma.");
-        setIndicator(true,"Sinyal aranıyor",true);
+        setMessage("Eyes not detected. Move closer and avoid shadows.");
+        setIndicator(true,"Looking for signal",true);
       }
     }
     if(S.phase==="results" && found && S.model){
@@ -233,8 +233,8 @@ function loop(now){
   }catch(e){
     S.issue=e?.message||String(e);
     stage("ready");setVisible(els.target,false);setVisible(els.estimate,false);
-    announce("İzleme durakladı.","Kamerayı yeniden başlatmayı deneyebilirsin.");
-    setMessage("İzleme hatası: "+S.issue);
+    announce("Tracking stopped.","Try restarting the camera.");
+    setMessage("Tracking error: "+S.issue);
     releaseCamera();stage("error");return;
   }
   S.raf=requestAnimationFrame(loop);
@@ -245,9 +245,9 @@ function restart(){
 function stopCamera(){
   releaseCamera();S.feature=null;S.model=null;S.result=null;
   stage("idle");setVisible(els.target,false);setVisible(els.estimate,false);setVisible(els.metrics,false);
-  setIndicator(false,"Kamera kapalı");els.counter.textContent="Hazır";
-  announce("Gözlerinle kontrol et.","Başlatmak için kameraya izin ver. Veriler yalnızca cihazında işlenir.");
-  setMessage("Kamera durduruldu. Herhangi bir görüntü kaydedilmedi.");
+  setIndicator(false,"Camera off");els.counter.textContent="Hazır";
+  announce("Gözlerinle kontrol et.","Allow camera access to begin. Processing stays on your device.");
+  setMessage("Camera stopped. No images were saved.");
 }
 function exportResult(){
   if(!S.result)return;
@@ -262,5 +262,5 @@ els.restart.addEventListener("click",restart);
 els.stop.addEventListener("click",stopCamera);
 els.export.addEventListener("click",exportResult);
 window.addEventListener("pagehide",releaseCamera);
-window.addEventListener("orientationchange",()=>{if(S.phase==="calibration"||S.phase==="validation"){stage("ready");setVisible(els.target,false);announce("Ekran yönü değişti.","Kalibrasyon ölçümleri iptal edildi. Yeniden deneyebilirsin.");setMessage("Ekran yönü değişti; test yeniden başlatılmalı.");}});
+window.addEventListener("orientationchange",()=>{if(S.phase==="calibration"||S.phase==="validation"){stage("ready");setVisible(els.target,false);announce("Screen orientation changed.","Calibration ölçümleri iptal edildi. Yeniden deneyebilirsin.");setMessage("Screen orientation changed; restart the test.");}});
 controls();
