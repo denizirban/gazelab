@@ -253,7 +253,7 @@ function loop(now){
     let fresh=false;
     // 15 FPS upper cap to reduce battery and UI blocking on iPhones.
     if(els.video.paused && S.stream && els.video.readyState>=2){els.video.play().catch(()=>{});}
-    if(els.video.readyState>=2 && els.video.currentTime!==S.lastVideoTime && now-S.lastInfer>=65){
+    if(els.video.readyState>=2 && now-S.lastInfer>=110){
       const result=S.landmarker.detectForVideo(els.video,now);
       S.lastVideoTime=els.video.currentTime;S.lastInfer=now;
       alignFace(result.faceLandmarks?.[0],now);
@@ -280,7 +280,7 @@ function loop(now){
         setIndicator(true,"Looking for signal",true);
       }
     }
-    if(S.phase==="paint"){tickPaint(found&&fresh);}
+    if(S.phase==="paint"){tickPaint(fresh);}
     if(S.phase==="game"){tickGame(now,found&&fresh);}
     if(S.phase==="results" && found && S.model){
       const q=S.model.predict(S.feature);place(els.estimate,clamp(q[0],.025,.975),clamp(q[1],.025,.975));
@@ -361,7 +361,8 @@ function beginPaint(mode){
  els.counter.textContent="Eye Paint";
 }
 function tickPaint(fresh){
- if(!fresh||!S.feature){S.paintPrev=null;setIndicator(false,els.video.paused?"Camera paused":(performance.now()-S.lastSeen>1100?"Eyes not detected":"Tracking…"));return;}
+ if(!S.feature || performance.now()-S.lastSeen>1500){S.paintPrev=null;setIndicator(false,els.video.paused?"Camera paused":(els.video.readyState<2?"Waiting for camera":"Eyes not detected"));return;}
+ if(!fresh)return;
  let q;
  if(S.paintMode==="calibrated")q=S.model.predict(S.feature);
  else{
