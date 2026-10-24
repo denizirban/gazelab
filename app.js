@@ -14,7 +14,7 @@ const validation = [
 ];
 const S = { phase:"idle", stream:null, landmarker:null, raf:0, lastVideoTime:-1,
             feature:null, lastSeen:0, phaseStart:0, stepStart:0, step:0, samples:[],
-            train:[], test:[], model:null, result:null, lastInfer:0, issue:"",alignmentOK:false,alignedSince:0,headBaseline:null,headNow:null,game:null,gameLast:0,gameGaze:null,gameLastSeen:0,paintMode:null,paintPrev:null,paintSmooth:null,paintCenter:null,paintRange:null };
+            train:[], test:[], model:null, result:null, lastInfer:0, issue:"",alignmentOK:false,alignedSince:0,headBaseline:null,headNow:null,game:null,gameLast:0,gameGaze:null,gameLastSeen:0,paintMode:null,paintPrev:null,paintSmooth:null,paintCenter:null,paintRange:null,paintHue:0 };
 const clamp = (x,a,b) => Math.max(a,Math.min(b,x));
 function setMessage(message){els.message.textContent=message;}
 function setIndicator(ok,message,warn=false){els.led.className="led"+(ok?(warn?" warn":" on"):"");els.stateText.textContent=message;}
@@ -355,7 +355,7 @@ function tickGame(now,fresh){
 function beginPaint(mode){
  if(!S.landmarker||!S.stream)return;
  if(mode==="calibrated"&&!S.model)return;
- S.paintMode=mode;S.paintPrev=null;S.paintSmooth=null;
+ S.paintMode=mode;S.paintPrev=null;S.paintSmooth=null;S.paintHue=0;
  if(mode==="instant"){
   // Relative motion only; center is the starting gaze, not an absolute screen point.
   S.paintCenter=S.feature?[...S.feature]:null;
@@ -390,7 +390,7 @@ function tickPaint(fresh){
   const dx=(x-S.paintPrev[0])*rect.width,dy=(y-S.paintPrev[1])*rect.height;
   if(Math.hypot(dx,dy)<Math.max(55,rect.width*.15)){
    ctx.beginPath();ctx.moveTo(S.paintPrev[0]*rect.width,S.paintPrev[1]*rect.height);
-   ctx.lineTo(x*rect.width,y*rect.height);ctx.lineWidth=2.5;ctx.strokeStyle="#007aff";ctx.lineCap="round";ctx.stroke();
+   ctx.lineTo(x*rect.width,y*rect.height);ctx.lineWidth=4;ctx.strokeStyle="hsl("+Math.round(S.paintHue%360)+",95%,55%)";ctx.lineCap="round";ctx.lineJoin="round";ctx.stroke();S.paintHue+=8;
   }
  }
  S.paintPrev=[x,y];
