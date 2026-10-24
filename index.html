@@ -7,6 +7,9 @@
   <meta name="description" content="Gaze Lab — an experimental gaze tracking study.">
   <title>Gaze Lab — Eye Tracking Study</title>
   <style>
+.board>.preview{position:absolute;inset:0;width:100%;height:100%;margin:0;border-radius:0;opacity:.42;z-index:0}
+.board>.preview video{width:100%;height:100%;object-fit:cover}
+.board>.preview small{display:none}
 .alignment{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:3;pointer-events:none}
 .faceOval{position:absolute;width:min(52%,215px);height:min(76%,295px);border:2px dashed #9b9ba1;border-radius:49%;transition:border-color .2s,transform .2s}
 .faceOval.good{border:3px solid #30a46c}
