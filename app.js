@@ -36,13 +36,25 @@ function announce(heading,detail){
   els.centerInfo.querySelector("p").textContent=detail;
   setVisible(els.centerInfo,true);
 }
-function stage(phase){S.phase=phase;setVisible(els.alignment,phase==="ready");controls();}
+const cameraPreview=els.video.parentElement;
+const previewHome=cameraPreview.parentElement;
+function stage(phase){
+ S.phase=phase;
+ if(phase==="ready"){
+  els.board.prepend(cameraPreview);
+  setVisible(els.centerInfo,false);
+ }else{
+  previewHome.append(cameraPreview);
+ }
+ setVisible(els.alignment,phase==="ready");
+ controls();
+}
 function alignFace(lm,now){
  let message="Position your face",ok=false,head=null;
  if(lm&&lm.length>=478){
   const a=lm[33],b=lm[263],n=lm[1],top=lm[10],chin=lm[152];
   const x=(a.x+b.x)/2,y=(a.y+b.y)/2,w=Math.hypot(a.x-b.x,a.y-b.y);
-  const roll=Math.abs(Math.atan2(a.y-b.y,a.x-b.x)*180/Math.PI);
+  const roll=Math.abs(Math.atan2(b.y-a.y,b.x-a.x)*180/Math.PI);
   const h=Math.hypot(chin.x-top.x,chin.y-top.y);
   head={x,y,w,roll};
   if(w<.19||h<.30)message="Move closer";
