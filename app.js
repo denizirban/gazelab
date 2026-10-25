@@ -475,14 +475,14 @@ function setupChoice(){
 }
 function startChoice(){
  if(S.phase!=="results"||!S.model)return;
- S.choice={round:0,rows:[],phase:"observe",started:performance.now(),samples:[0,0],unknown:0,first:null,last:null,valid:0};
+ S.choice={round:0,rows:[],phase:"observe",started:performance.now(),samples:[0,0],unknown:0,first:null,last:null,valid:0,sideOrder:Array.from({length:6},(_,i)=>i<3).sort(()=>Math.random()-.5)};
  stage("choice");setVisible(els.estimate,false);setVisible(els.metrics,false);setVisible(els.metricExtra,false);setVisible(els.centerInfo,false);
  els.choiceOverlay.hidden=false;choiceRound();
 }
 function choiceRound(){
  const c=S.choice;if(!c)return;
- c.phase="observe";c.started=performance.now();c.samples=[0,0];c.unknown=0;c.first=null;c.last=null;c.valid=0;
- const pair=choiceSets[c.round],reversed=c.round%2===1;
+ c.phase="observe";c.started=performance.now();c.samples=[0,0];c.unknown=0;c.first=null;c.last=null;c.lastRegion=null;c.valid=0;
+ const pair=choiceSets[c.round],reversed=c.sideOrder[c.round];
  c.options=reversed?[pair[1],pair[0]]:pair;
  els.choiceOverlay.innerHTML="";
  const title=document.createElement("div");title.className="choicePrompt";title.textContent="Which one feels more like you?";
@@ -505,7 +505,7 @@ function tickChoice(now,fresh){
    const px=rect.left+q[0]*rect.width,py=rect.top+q[1]*rect.height;
    const hit=boxes.findIndex(b=>px>=b.left&&px<=b.right&&py>=b.top&&py<=b.bottom);
    const dt=c.last?Math.min(250,now-c.last):110;c.last=now;
-   if(hit>=0){c.samples[hit]+=dt;c.valid+=dt;if(c.first===null)c.first=hit;}
+   if(hit>=0){c.samples[hit]+=dt;c.valid+=dt;if(c.first===null)c.first=hit;c.lastRegion=hit;}
    else c.unknown+=dt;
   }
  }
@@ -518,25 +518,35 @@ function tickChoice(now,fresh){
 function chooseChoice(i){
  const c=S.choice;if(!c||c.phase!=="choose")return;
  const total=c.samples[0]+c.samples[1],more=total>0?(c.samples[0]===c.samples[1]?null:(c.samples[0]>c.samples[1]?0:1)):null;
- const row={round:c.round+1,options:c.options.map(o=>o[1]),chosen:i,chosenLabel:c.options[i][1],lookedLongerAt:more===null?null:c.options[more][1],dwellMs:c.samples.map(Math.round),unclassifiedMs:Math.round(c.unknown),firstRegion:c.first,agreement:more===null?null:more===i,validMs:Math.round(c.valid)};
- c.rows.push(row);c.phase="reveal";
+ const row={round:c.round+1,options:c.options.map(o=>o[1]),chosen:i,chosenLabel:c.options[i][1],lookedLongerAt:more===null?null:c.options[more][1],dwellMs:c.samples.map(Math.round),unclassifiedMs:Math.round(c.unknown),firstRegion:c.first,lastRegion:c.lastRegion,agreement:more===null?null:more===i,validMs:Math.round(c.valid),confidence:null};
+ c.rows.push(row);c.phase="confidence";
+ els.choiceOverlay.innerHTML="";
+ const ch=document.createElement("div");ch.className="choicePrompt";ch.textContent="How sure are you?";
+ const sub=document.createElement("div");sub.className="choiceHint";sub.textContent="You chose "+row.chosenLabel+". Rate your confidence before seeing your gaze results.";
+ const buttons=document.createElement("div");buttons.style.cssText="display:flex;gap:8px;flex-wrap:wrap;justify-content:center";
+ ["Not sure","Somewhat sure","Very sure"].forEach((label,k)=>{const b=document.createElement("button");b.textContent=label;b.addEventListener("click",()=>{row.confidence=k+1;revealChoice(row,i,more,total);});buttons.append(b);});
+ els.choiceOverlay.append(ch,sub,buttons);
+}
+function revealChoice(row,i,more,total){
+ const c=S.choice;if(!c||c.phase!=="confidence")return;c.phase="reveal";
  els.choiceOverlay.innerHTML="";
  const h=document.createElement("div");h.className="choicePrompt";h.textContent=total<900?"Not enough reliable gaze data":more===null?"Your gaze was evenly split":more===i?"Your gaze and choice matched":"Your gaze and choice differed";
- const d=document.createElement("div");d.className="choiceResult";d.textContent="You chose "+row.chosenLabel+". Estimated viewing time: "+row.options[0]+" "+(row.dwellMs[0]/1000).toFixed(1)+"s · "+row.options[1]+" "+(row.dwellMs[1]/1000).toFixed(1)+"s. This describes this round, not your unconscious preferences.";
+ const d=document.createElement("div");d.className="choiceResult";d.textContent="You chose "+row.chosenLabel+" ("+["","not sure","somewhat sure","very sure"][row.confidence]+"). Estimated viewing time: "+row.options[0]+" "+(row.dwellMs[0]/1000).toFixed(1)+"s · "+row.options[1]+" "+(row.dwellMs[1]/1000).toFixed(1)+"s. First seen: "+(row.firstRegion===null?"unclassified":row.options[row.firstRegion])+". Last seen: "+(row.lastRegion===null?"unclassified":row.options[row.lastRegion])+". This is not a measure of unconscious preference.";
  const next=document.createElement("button");next.className="primary";next.textContent=c.round===choiceSets.length-1?"See my results":"Next round";next.addEventListener("click",()=>{c.round++;if(c.round<choiceSets.length)choiceRound();else finishChoice();});
  els.choiceOverlay.append(h,d,next);
 }
 function finishChoice(){
  const c=S.choice;if(!c)return;
- const usable=c.rows.filter(r=>r.validMs>=900&&r.agreement!==null),matches=usable.filter(r=>r.agreement).length;
+ const usable=c.rows.filter(r=>r.validMs>=1800&&r.agreement!==null),matches=usable.filter(r=>r.agreement).length;
  els.choiceOverlay.innerHTML="";
  const h=document.createElement("div");h.className="choicePrompt";h.textContent="Your Eyes vs Your Choice";
  const d=document.createElement("div");d.className="choiceResult";
- d.textContent=usable.length?"Your gaze favored your final choice in "+matches+" of "+usable.length+" measurable rounds. "+(c.rows.length-usable.length)+" rounds had insufficient or inconclusive gaze data.":"Not enough reliable gaze data to compare choices. Try recalibrating.";
+ const confident=usable.filter(r=>r.confidence===3),confidentMatch=confident.filter(r=>r.agreement).length;
+ d.textContent=usable.length?"Your gaze favored your final choice in "+matches+" of "+usable.length+" measurable rounds. For very confident choices: "+confidentMatch+" of "+confident.length+" matched. "+(c.rows.length-usable.length)+" rounds had insufficient or inconclusive gaze data.":"Not enough reliable gaze data to compare choices. Try recalibrating.";
  const p=document.createElement("div");p.className="choiceHint";p.textContent="This is an exploratory visual-attention game, not a personality or subconscious preference test.";
  const b=document.createElement("button");b.className="primary";b.textContent="Finish";b.addEventListener("click",endChoice);
  els.choiceOverlay.append(h,d,p,b);
- if(S.result)S.result.choiceExperiment={name:"Your Eyes vs Your Choice",rounds:c.rows,matchingRounds:matches,usableRounds:usable.length,disclaimer:"Exploratory, non-clinical. Gaze estimates are not unconscious preference measures."};
+ if(S.result)S.result.choiceExperiment={name:"Your Eyes vs Your Choice",rounds:c.rows,matchingRounds:matches,usableRounds:usable.length,highConfidenceRounds:confident.length,highConfidenceMatches:confidentMatch,disclaimer:"Exploratory, non-clinical. Gaze estimates are not unconscious preference measures."};
  c.phase="complete";
 }
 function endChoice(){
