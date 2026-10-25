@@ -378,7 +378,8 @@ function tickPaint(fresh){
  if(S.paintMode==="calibrated")q=S.model.predict(S.feature);
  else{
   if(!S.paintCenter)S.paintCenter=[...S.feature];
-  q=[.5+(S.feature[0]-S.paintCenter[0])/S.paintRange[0],.5+(S.feature[1]-S.paintCenter[1])/S.paintRange[1]];
+  // Front-camera landmark x is mirrored relative to the user-facing paint canvas.
+  q=[.5-(S.feature[0]-S.paintCenter[0])/S.paintRange[0],.5+(S.feature[1]-S.paintCenter[1])/S.paintRange[1]];
  }
  if(!q.every(Number.isFinite))return;
  q=q.map(v=>clamp(v,.035,.965));
