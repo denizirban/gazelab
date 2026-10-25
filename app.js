@@ -475,27 +475,28 @@ function setupChoice(){
 }
 function startChoice(){
  if(S.phase!=="results"||!S.model)return;
- S.choice={round:0,rows:[],phase:"observe",started:performance.now(),samples:[0,0],unknown:0,first:null,last:null,valid:0,sideOrder:Array.from({length:6},(_,i)=>i<3).sort(()=>Math.random()-.5)};
+ S.choice={round:0,rows:[],phase:"observe",started:performance.now(),samples:[0,0],unknown:0,first:null,last:null,valid:0,sideOrder:[false,false,false,true,true,true].sort(()=>Math.random()-.5)};
  stage("choice");setVisible(els.estimate,false);setVisible(els.metrics,false);setVisible(els.metricExtra,false);setVisible(els.centerInfo,false);
  els.choiceOverlay.hidden=false;choiceRound();
 }
 function choiceRound(){
  const c=S.choice;if(!c)return;
  c.phase="observe";c.started=performance.now();c.samples=[0,0];c.unknown=0;c.first=null;c.last=null;c.lastRegion=null;c.valid=0;
- const pair=choiceSets[c.round],reversed=c.sideOrder[c.round];
+ const repeat=c.round>=choiceSets.length;
+ const pair=choiceSets[c.round%choiceSets.length],reversed=repeat?!c.sideOrder[c.round%choiceSets.length]:c.sideOrder[c.round];
  c.options=reversed?[pair[1],pair[0]]:pair;
  els.choiceOverlay.innerHTML="";
- const title=document.createElement("div");title.className="choicePrompt";title.textContent="Which one feels more like you?";
- const hint=document.createElement("div");hint.className="choiceHint";hint.textContent="Round "+(c.round+1)+" / "+choiceSets.length+" · Just look for 6 seconds";
+ const title=document.createElement("div");title.className="choicePrompt";title.textContent=repeat?"Would you make the same choice?":"Which one feels more like you?";
+ const hint=document.createElement("div");hint.className="choiceHint";hint.textContent=(repeat?"Second look":"First look")+" · "+(c.round%choiceSets.length+1)+" / "+choiceSets.length+" · Observe for 6 seconds";
  const cards=document.createElement("div");cards.className="choiceCards";
  c.options.forEach((o,i)=>{const card=document.createElement("div");card.className="choiceCard";card.style.background=o[2];card.innerHTML='<span class="choiceIcon"></span><span class="choiceLabel"></span>';card.querySelector(".choiceIcon").textContent=o[0];card.querySelector(".choiceLabel").textContent=o[1];cards.append(card);});
  els.choiceOverlay.append(title,hint,cards);c.hint=hint;c.cards=cards;
- setIndicator(true,"Observing gaze · "+(c.round+1)+"/6");
+ setIndicator(true,(repeat?"Second look":"First look")+" · "+(c.round%choiceSets.length+1)+"/6");
 }
 function tickChoice(now,fresh){
  const c=S.choice;if(!c||c.phase!=="observe")return;
  const elapsed=now-c.started;
- c.hint.textContent="Round "+(c.round+1)+" / 6 · "+Math.max(0,Math.ceil((6000-elapsed)/1000))+"s";
+ c.hint.textContent=(c.round>=choiceSets.length?"Second look":"First look")+" · "+(c.round%choiceSets.length+1)+"/6 · "+Math.max(0,Math.ceil((6000-elapsed)/1000))+"s";
  if(fresh&&S.feature){
   const q=S.model.predict(S.feature);
   if(q.every(Number.isFinite)){
@@ -518,7 +519,7 @@ function tickChoice(now,fresh){
 function chooseChoice(i){
  const c=S.choice;if(!c||c.phase!=="choose")return;
  const total=c.samples[0]+c.samples[1],more=total>0?(c.samples[0]===c.samples[1]?null:(c.samples[0]>c.samples[1]?0:1)):null;
- const row={round:c.round+1,options:c.options.map(o=>o[1]),chosen:i,chosenLabel:c.options[i][1],lookedLongerAt:more===null?null:c.options[more][1],dwellMs:c.samples.map(Math.round),unclassifiedMs:Math.round(c.unknown),firstRegion:c.first,lastRegion:c.lastRegion,agreement:more===null?null:more===i,validMs:Math.round(c.valid),confidence:null};
+ const row={round:c.round+1,pass:c.round>=choiceSets.length?2:1,pairId:c.round%choiceSets.length,options:c.options.map(o=>o[1]),chosen:i,chosenLabel:c.options[i][1],lookedLongerAt:more===null?null:c.options[more][1],dwellMs:c.samples.map(Math.round),unclassifiedMs:Math.round(c.unknown),firstRegion:c.first,lastRegion:c.lastRegion,agreement:more===null?null:more===i,validMs:Math.round(c.valid),confidence:null};
  c.rows.push(row);c.phase="confidence";
  els.choiceOverlay.innerHTML="";
  const ch=document.createElement("div");ch.className="choicePrompt";ch.textContent="How sure are you?";
@@ -532,21 +533,31 @@ function revealChoice(row,i,more,total){
  els.choiceOverlay.innerHTML="";
  const h=document.createElement("div");h.className="choicePrompt";h.textContent=total<900?"Not enough reliable gaze data":more===null?"Your gaze was evenly split":more===i?"Your gaze and choice matched":"Your gaze and choice differed";
  const d=document.createElement("div");d.className="choiceResult";d.textContent="You chose "+row.chosenLabel+" ("+["","not sure","somewhat sure","very sure"][row.confidence]+"). Estimated viewing time: "+row.options[0]+" "+(row.dwellMs[0]/1000).toFixed(1)+"s · "+row.options[1]+" "+(row.dwellMs[1]/1000).toFixed(1)+"s. First seen: "+(row.firstRegion===null?"unclassified":row.options[row.firstRegion])+". Last seen: "+(row.lastRegion===null?"unclassified":row.options[row.lastRegion])+". This is not a measure of unconscious preference.";
- const next=document.createElement("button");next.className="primary";next.textContent=c.round===choiceSets.length-1?"See my results":"Next round";next.addEventListener("click",()=>{c.round++;if(c.round<choiceSets.length)choiceRound();else finishChoice();});
+ const next=document.createElement("button");next.className="primary";next.textContent=c.round===choiceSets.length*2-1?"See my results":c.round===choiceSets.length-1?"Start second look":"Next round";next.addEventListener("click",()=>{c.round++;if(c.round===choiceSets.length){showChoiceBreak();}else if(c.round<choiceSets.length*2)choiceRound();else finishChoice();});
  els.choiceOverlay.append(h,d,next);
+}
+function showChoiceBreak(){
+ const c=S.choice;if(!c)return;c.phase="break";els.choiceOverlay.innerHTML="";
+ const h=document.createElement("div");h.className="choicePrompt";h.textContent="Second Look";
+ const d=document.createElement("div");d.className="choiceResult";d.textContent="You will see the same six pairs again, with left and right positions switched. Your choice may stay the same or change. There is no right answer.";
+ const b=document.createElement("button");b.className="primary";b.textContent="Begin second look";b.addEventListener("click",choiceRound);
+ els.choiceOverlay.append(h,d,b);setIndicator(true,"Second look · ready");
 }
 function finishChoice(){
  const c=S.choice;if(!c)return;
  const usable=c.rows.filter(r=>r.validMs>=1800&&r.agreement!==null),matches=usable.filter(r=>r.agreement).length;
+ const first=c.rows.filter(r=>r.pass===1),second=c.rows.filter(r=>r.pass===2);
+ const comparisons=second.map(b=>{const a=first.find(x=>x.pairId===b.pairId);return {pairId:b.pairId,firstChoice:a?.chosenLabel??null,secondChoice:b.chosenLabel,changed:a?a.chosenLabel!==b.chosenLabel:null,firstConfidence:a?.confidence??null,secondConfidence:b.confidence,firstGazeMs:a?.dwellMs??null,secondGazeMs:b.dwellMs,firstOptions:a?.options??null,secondOptions:b.options};});
+ const changed=comparisons.filter(x=>x.changed===true).length;
  els.choiceOverlay.innerHTML="";
  const h=document.createElement("div");h.className="choicePrompt";h.textContent="Your Eyes vs Your Choice";
  const d=document.createElement("div");d.className="choiceResult";
  const confident=usable.filter(r=>r.confidence===3),confidentMatch=confident.filter(r=>r.agreement).length;
- d.textContent=usable.length?"Your gaze favored your final choice in "+matches+" of "+usable.length+" measurable rounds. For very confident choices: "+confidentMatch+" of "+confident.length+" matched. "+(c.rows.length-usable.length)+" rounds had insufficient or inconclusive gaze data.":"Not enough reliable gaze data to compare choices. Try recalibrating.";
- const p=document.createElement("div");p.className="choiceHint";p.textContent="This is an exploratory visual-attention game, not a personality or subconscious preference test.";
+ d.textContent="You changed your choice in "+changed+" of "+comparisons.length+" repeated pairs (with the sides swapped). "+(usable.length?"Gaze favored your chosen option in "+matches+" of "+usable.length+" measurable rounds. High-confidence matches: "+confidentMatch+" of "+confident.length+".":"There was not enough reliable gaze data to compare attention.")+" Changes may reflect many factors, including order, familiarity and uncertainty; they do not reveal hidden desires.";
+ const p=document.createElement("div");p.className="choiceHint";p.textContent="12 rounds · 6 repeated pairs · No deception. This is an exploratory visual-attention game, not a personality or subconscious preference test.";
  const b=document.createElement("button");b.className="primary";b.textContent="Finish";b.addEventListener("click",endChoice);
  els.choiceOverlay.append(h,d,p,b);
- if(S.result)S.result.choiceExperiment={name:"Your Eyes vs Your Choice",rounds:c.rows,matchingRounds:matches,usableRounds:usable.length,highConfidenceRounds:confident.length,highConfidenceMatches:confidentMatch,disclaimer:"Exploratory, non-clinical. Gaze estimates are not unconscious preference measures."};
+ if(S.result)S.result.choiceExperiment={name:"Your Eyes vs Your Choice",rounds:c.rows,matchingRounds:matches,usableRounds:usable.length,highConfidenceRounds:confident.length,highConfidenceMatches:confidentMatch,choiceReversal:{changedPairs:changed,totalPairs:comparisons.length,comparisons,sideSwap:true},disclaimer:"Exploratory, non-clinical. Gaze estimates are not unconscious preference measures."};
  c.phase="complete";
 }
 function endChoice(){
