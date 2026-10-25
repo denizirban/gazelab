@@ -147,13 +147,71 @@ function runCalibration(){
  }
 }
 
+function runEyeMovementTest(){
+ clearInterval(eyeCheckTimer);clearInterval(calibrationTimer);
+ if(!eye){showIntro();return;}
+ const steps=[
+  {name:"CENTER",x:.5,y:.5},{name:"LEFT",x:.17,y:.5},{name:"RIGHT",x:.83,y:.5},
+  {name:"CENTER",x:.5,y:.5},{name:"UP",x:.5,y:.17},{name:"DOWN",x:.5,y:.83},
+  {name:"CENTER",x:.5,y:.5}
+ ];
+ const readings=[];let index=0,bucket=[],started=performance.now();
+ const label=el("div","hd-kicker","SINGLE EYE / SIGNAL DIAGNOSTIC");
+ const title=el("h2","hd-title","Follow the moving target.");
+ const note=el("p","hd-description","Move only your eyes toward the dot. Keep your head as still as comfortable. This tests iris signal direction before screen calibration.");
+ const area=el("div","hd-calibration-area"),dot=el("div","hd-calibration-dot");
+ const status=el("p","hd-eye-status","Waiting for eye signal…");
+ area.append(dot);body.replaceChildren(label,title,note,area,status,button("Back to eye check",()=>{clearInterval(calibrationTimer);eyeCheck();},true));
+ const mode=selectedEyeMode,token=galleryToken;
+ calibrationTimer=setInterval(()=>{
+  if(!eye||root.hidden||galleryToken!==token){clearInterval(calibrationTimer);return;}
+  const step=steps[index],now=performance.now();
+  if(!step){clearInterval(calibrationTimer);finish();return;}
+  dot.style.left=step.x*100+"%";dot.style.top=step.y*100+"%";
+  status.textContent="Target "+(index+1)+" / "+steps.length+" · "+step.name+" · "+bucket.length+" samples";
+  const f=feature(eye.latest,mode);
+  if(now-started>350&&f&&now-eye.latest.t<400)bucket.push({f,t:now,head:eye.latest.head});
+  if(now-started>=1600){
+   const median=k=>{const values=bucket.map(p=>p.f[k]).sort((a,b)=>a-b);return values.length?values[Math.floor(values.length/2)]:null;};
+   readings.push({name:step.name,x:median(0),y:median(1),headX:median(2),headY:median(3),samples:bucket.length});
+   index++;bucket=[];started=now;
+  }
+ },100);
+ function finish(){
+  const [center,left,right,center2,up,down,center3]=readings;
+  const dx=left&&right&&left.x!==null&&right.x!==null?right.x-left.x:null;
+  const dy=up&&down&&up.y!==null&&down.y!==null?down.y-up.y:null;
+  const horizontal=dx===null?"unavailable":Math.abs(dx)<.015?"weak":dx>0?"positive":"negative";
+  const vertical=dy===null?"unavailable":Math.abs(dy)<.015?"weak":dy>0?"positive":"negative";
+  const centers=[center,center2,center3].filter(p=>p.x!==null&&p.y!==null);
+  const drift=centers.length>=2?Math.hypot(centers[centers.length-1].x-centers[0].x,centers[centers.length-1].y-centers[0].y):null;
+  const headDrift=centers.length>=2?Math.hypot(centers[centers.length-1].headX-centers[0].headX,centers[centers.length-1].headY-centers[0].headY):null;
+  const coverage=readings.reduce((a,p)=>a+p.samples,0);
+  eye.diagnostic={eyeMode:mode,readings,horizontal,vertical,centerDrift:drift,headDrift,sampleCount:coverage};
+  body.replaceChildren(el("div","hd-kicker","EYE SIGNAL / RESULTS"),el("h2","hd-title","Movement signal report."));
+  const lines=[
+   "Horizontal iris signal: "+horizontal+(dx===null?"":" (Δ "+dx.toFixed(3)+")"),
+   "Vertical iris signal: "+vertical+(dy===null?"":" (Δ "+dy.toFixed(3)+")"),
+   "Center repeatability: "+(drift===null?"unavailable":drift.toFixed(3)),
+   "Head position change: "+(headDrift===null?"unavailable":headDrift.toFixed(3)),
+   "Usable samples: "+coverage
+  ];
+  lines.forEach(line=>body.append(el("p","hd-eye-status",line)));
+  body.append(el("p","hd-note","Positive/negative describes camera coordinate direction, not whether screen gaze is accurate. Weak signals, head movement and center drift can explain failed calibration. This test does not validate gaze position."));
+  body.append(button("Try quick calibration",runCalibration),button("Repeat movement test",runEyeMovementTest,true),button("Continue with touch only",()=>{stopEyes();startGame();},true));
+  const download=button("Export diagnostic JSON",()=>{
+   const blob=new Blob([JSON.stringify(eye?.diagnostic||{},null,2)],{type:"application/json"});
+   const url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="gazelab-eye-signal-test.json";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  },true);body.append(download);
+ }
+}
 function eyeCheck(){
  clearInterval(eyeCheckTimer);
  if(!eye){startGame();return;}
  body.replaceChildren();
  const kicker=el("div","hd-kicker","CAMERA / SIGNAL CHECK");
  const title=el("h2","hd-title","First, find your eyes.");
- const desc=el("p","hd-description","Position your face inside the frame. The indicator shows whether both irises are detected. This checks tracking availability, not gaze accuracy.");
+ const desc=el("p","hd-description","Keep both eyes open. The camera checks one iris signal, not the entire face as a target. Use soft indirect lighting; do not aim a flashlight into your eye.");
  const frame=el("div","hd-camera-check");
  const preview=eye.video;preview.className="hd-check-video";frame.append(preview);
  const oval=el("div","hd-check-oval");frame.append(oval);
@@ -168,7 +226,8 @@ function eyeCheck(){
  eye.mode=selectedEyeMode;
  const next=button("Quick gaze calibration",()=>{clearInterval(eyeCheckTimer);runCalibration();});next.disabled=true;
  const retry=button("Continue without eye data",()=>{clearInterval(eyeCheckTimer);stopEyes();startGame();},true);
- body.append(kicker,title,desc,frame,heading,status,next,retry);
+ const diagnostic=button("Test eye movement first",()=>{clearInterval(eyeCheckTimer);runEyeMovementTest();},true);
+ body.append(kicker,title,desc,frame,heading,status,diagnostic,next,retry);
  let valid=0,attempts=0;
  eyeCheckTimer=setInterval(()=>{
   if(!eye){clearInterval(eyeCheckTimer);return;}
@@ -219,19 +278,20 @@ function collectEyes(){
    };
    const a=iris(468,33,133),b=iris(473,362,263);
    left=a;right=b;
-   if(a!==null&&b!==null&&Number.isFinite(a.x+b.x)&&Number.isFinite(a.y+b.y)){x=Math.round((a.x+b.x)*5000)/10000;y=Math.round((a.y+b.y)*5000)/10000;eye.lastDetected=now;}
+   if(a&&b&&Number.isFinite(a.x+b.x)&&Number.isFinite(a.y+b.y)){x=(a.x+b.x)/2;y=(a.y+b.y)/2;}
+   if((a&&Number.isFinite(a.x+a.y))||(b&&Number.isFinite(b.x+b.y)))eye.lastDetected=now;
    head={cx:(lm[33].x+lm[263].x)/2,cy:(lm[33].y+lm[263].y)/2,width:Math.hypot(lm[263].x-lm[33].x,lm[263].y-lm[33].y),roll:Math.atan2(lm[263].y-lm[33].y,lm[263].x-lm[33].x)};
   }
-  eye.latest=x===null?null:{x,y,left,right,head,t:now};if(eye.start)eye.samples.push({t:Math.round(now-eye.start),x,y,left,right,head});
+  eye.latest=left||right?{x,y,left,right,head,t:now}:null;if(eye.start)eye.samples.push({t:Math.round(now-eye.start),x,y,left,right,head});
  }catch(_){}
 }
 function beginEyeRound(){if(eye){eye.samples=[];eye.start=performance.now();}}
 function endEyeRound(record){
  if(!eye){record.eyeTracking={status:"off"};return;}
  const data=eye.samples;eye.samples=[];eye.start=0;
- const valid=data.filter(p=>p.x!==null);
+ const valid=data.filter(p=>!!feature(p,eye.mode||selectedEyeMode));
  const gaps=[];for(let i=1;i<valid.length;i++)gaps.push(valid[i].t-valid[i-1].t);
- const xs=valid.map(p=>p.x),hs=valid.map(p=>p.head?.cx).filter(Number.isFinite);
+ const xs=valid.map(p=>feature(p,eye.mode||selectedEyeMode)[0]),hs=valid.map(p=>p.head?.cx).filter(Number.isFinite);
  record.eyeTracking={
   status:valid.length>=10?"exploratory":"insufficient",eyeMode:eye.mode||selectedEyeMode,
   sampleCount:data.length,validCount:valid.length,
@@ -240,7 +300,7 @@ function endEyeRound(record){
  longestValidSampleGapMs:gaps.length?Math.max(...gaps):null,
   horizontalSignalRange:xs.length?Math.max(...xs)-Math.min(...xs):null,
   headMovementRange:hs.length?Math.max(...hs)-Math.min(...hs):null,
-  samples:data.map(p=>{const gaze=eye.calibration?.passed&&p.x!==null&&p.y!==null?predictGaze(eye.calibration,feature(p,eye.calibration.eyeMode)):null;const bounds=record.artworkBounds;const artwork=gaze&&bounds?{x:(gaze.x*innerWidth-bounds.left)/bounds.width,y:(gaze.y*innerHeight-bounds.top)/bounds.height}:null;return {t:p.t,x:p.x,y:p.y,gaze,artwork:artwork&&Number.isFinite(artwork.x+artwork.y)?{x:Math.round(artwork.x*10000)/10000,y:Math.round(artwork.y*10000)/10000}:null};}),
+  samples:data.map(p=>{const gaze=eye.calibration?.passed&&feature(p,eye.calibration.eyeMode)?predictGaze(eye.calibration,feature(p,eye.calibration.eyeMode)):null;const bounds=record.artworkBounds;const artwork=gaze&&bounds?{x:(gaze.x*innerWidth-bounds.left)/bounds.width,y:(gaze.y*innerHeight-bounds.top)/bounds.height}:null;return {t:p.t,x:p.x,y:p.y,gaze,artwork:artwork&&Number.isFinite(artwork.x+artwork.y)?{x:Math.round(artwork.x*10000)/10000,y:Math.round(artwork.y*10000)/10000}:null};}),
   calibration:eye.calibration?{eyeMode:eye.calibration.eyeMode,passed:eye.calibration.passed,validationMedianErrorPct:eye.calibration.validationMedianErrorPct,validationMaxErrorPct:eye.calibration.validationMaxErrorPct}:null,
   note:"Exploratory camera gaze estimate only when independently validated; not a clinical or reference-grade measurement."
  };
