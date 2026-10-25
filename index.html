@@ -139,13 +139,61 @@
     .hd-result-actions{display:flex;gap:8px;flex-wrap:wrap}
     @media(max-width:699px){.hd-entry{padding:16px;align-items:flex-start;flex-direction:column}.hd-entry h2{font-size:23px}.hd-modal{padding:0}.hd-panel{max-height:100dvh;height:100dvh;border-radius:0;padding:16px}.hd-artwork{max-height:55dvh}.hd-stat strong{font-size:19px}}
     @media(prefers-reduced-motion:reduce){*,*:before,*:after{transition:none!important;animation:none!important}}
+
+    /* Gaze Lab / monochrome editorial design system */
+    :root{color-scheme:light!important;background:#fff!important;color:#111!important;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Helvetica Neue",Arial,sans-serif!important}
+    body{background:#fff;color:#111;letter-spacing:-.012em}
+    .shell{max-width:1120px!important;padding:28px clamp(18px,4vw,52px) 64px!important}
+    header{margin-bottom:clamp(54px,8vw,108px)!important;padding-bottom:19px;border-bottom:1px solid #e8e8e8}
+    .brand{font-size:19px!important;letter-spacing:-.055em!important;font-weight:760!important}
+    .brand small{color:#888!important;letter-spacing:.14em!important;font-size:9px!important}
+    .tag{border:1px solid #e3e3e3!important;color:#666!important;font-size:9px!important;letter-spacing:.13em!important;padding:9px 12px!important}
+    .intro{text-align:left!important;margin-bottom:clamp(44px,7vw,84px)!important;max-width:900px}
+    .intro .eyebrow{color:#888!important;font-size:10px!important;letter-spacing:.22em!important;margin-bottom:22px!important}
+    .intro h1{font-size:clamp(64px,11vw,132px)!important;letter-spacing:-.09em!important;line-height:.9!important;font-weight:730!important;margin:0 0 27px!important}
+    .intro .subtitle{margin:0!important;color:#777!important;font-size:clamp(15px,1.7vw,19px)!important;line-height:1.55!important;max-width:510px!important}
+    .hd-entry{background:#111!important;color:#fff!important;border-radius:26px!important;padding:clamp(26px,4vw,48px)!important;margin-bottom:25px!important;box-shadow:none!important;min-height:245px;align-items:flex-end!important}
+    .hd-entry .hd-eyebrow{color:#999!important;letter-spacing:.2em!important;font-size:10px!important}
+    .hd-entry h2{font-size:clamp(32px,4.5vw,58px)!important;letter-spacing:-.075em!important;line-height:1!important;margin:20px 0 16px!important}
+    .hd-entry p{color:#aaa!important;font-size:14px!important;max-width:490px!important}
+    .hd-entry button{background:#fff!important;color:#111!important;border-radius:100px!important;padding:16px 24px!important;font-size:12px!important;letter-spacing:-.015em!important}
+    .hd-entry button:hover{background:#dedede!important}
+    .workspace{border:1px solid #e9e9e9!important;box-shadow:none!important;border-radius:25px!important}
+    .workspace button.primary,.controls button.primary{background:#111!important;color:#fff!important;border-radius:100px!important}
+    .controls button:not(.primary){border-radius:100px!important}
+    .panel{border:1px solid #ededed!important;border-radius:20px!important}
+    .notice{color:#999!important;font-size:11px!important;line-height:1.75!important}
+    footer{border-top:1px solid #ededed;padding-top:24px;color:#999!important;letter-spacing:.13em!important}
+    .hd-modal{background:#000d!important}
+    .hd-panel{background:#fff!important;color:#111!important;border-radius:26px!important}
+    .hd-kicker{color:#888!important}
+    .hd-title{font-weight:720!important;letter-spacing:-.075em!important}
+    .hd-description,.hd-help,.hd-note{color:#777!important}
+    .hd-button{background:#111!important;color:#fff!important;border-radius:100px!important;padding:15px 22px!important}
+    .hd-secondary{background:#efefef!important;color:#111!important}
+    .hd-intro-art,.hd-art-shell,.hd-reveal{background:#171717!important}
+    .hd-stat{background:#f4f4f4!important}
+    .hd-timer{color:#111!important}
+    .hd-eye-toggle{display:flex;align-items:center;gap:9px;font-size:13px;font-weight:600;color:#333}
+    .hd-eye-toggle input{accent-color:#111;width:18px;height:18px}
+    .hd-close{background:#f1f1f1!important;color:#111!important}
+    @media(max-width:699px){
+      .shell{padding:19px 17px 44px!important}
+      header{margin-bottom:56px!important}
+      .intro{margin-bottom:43px!important}
+      .intro h1{font-size:clamp(57px,13.4vw,86px)!important}
+      .intro .subtitle{font-size:15px!important}
+      .hd-entry{min-height:260px;align-items:flex-start!important;gap:27px!important}
+      .hd-entry button{align-self:flex-start}
+      .hd-panel{border-radius:0!important}
+    }
   </style>
 </head>
 <body>
   <main class="shell">
-    <header><div class="brand">Gaze Lab <small>IRISPECTRA</small></div><div class="tag">Experimental · On-device</div></header>
-    <div class="intro"><div class="eyebrow">The Decision Lab</div><h1>Your eyes.<br>Your choice.</h1><p class="subtitle">Explore how visual attention and decisions interact. No nine-point calibration required for the choice experiment.</p></div>
-    <section class="hd-entry" aria-label="The Hidden Detail visual search game"><div><div class="hd-eyebrow">New · Art × Attention</div><h2>The Hidden Detail</h2><p>Find the impossible detail. Four original artworks, progressively harder visual search, and your own attention report.</p></div><button id="hiddenDetailStart" type="button">Explore the gallery</button></section>
+    <header><div class="brand">Gaze Lab <small>IRISPECTRA</small></div><div class="tag">Experimental / 2026</div></header>
+    <div class="intro"><div class="eyebrow">IRISPECTRA / GAZE LAB</div><h1>See<br>differently.</h1><p class="subtitle">A new way to explore how your eyes search, notice and decide. Experimental visual experiences, designed around you.</p></div>
+    <section class="hd-entry" aria-label="The Hidden Detail visual search game"><div><div class="hd-eyebrow">01 / ART × ATTENTION</div><h2>The Hidden Detail</h2><p>Find the impossible detail. A new gallery every time. Four progressively harder visual searches, optional eye data and your own results.</p></div><button id="hiddenDetailStart" type="button">Explore the gallery</button></section>
     <section class="workspace" aria-label="Gaze tracking study area">
       <div class="board" id="board">
         <div class="alignment" id="alignment" hidden><div class="faceOval" id="faceOval"><span class="eyeGuide"></span></div><div class="alignmentText" id="alignmentText">Position your face</div></div><div class="centerInfo" id="centerInfo"><div class="introIcon" aria-hidden="true">◎</div><h2>Discover how you decide.</h2><p>Start Your Eyes vs Your Choice for a quick direction check, then explore your attention and decisions.</p></div>
@@ -167,7 +215,7 @@
       </div><div class="metricExtra" id="metricExtra" hidden><div>Horizontal MAE<strong id="horizontal">—</strong></div><div>Vertical MAE<strong id="vertical">—</strong></div><div>Repeatability<strong id="repeatability">—</strong></div></div>
     </section>
     <div class="under">
-      <div class="panel"><h3>Test conditions</h3><div class="setting"><label for="lighting">Lighting</label><select id="lighting"><option value="daylight">Daylight</option><option value="indoor" selected>Indoor</option><option value="low">Low light</option></select></div><p>Hold 30–45 cm away. Look at each blue dot without touching the screen. Keep the phone still.</p></div>
+      <div class="panel"><h3>Research settings</h3><div class="setting"><label for="lighting">Lighting</label><select id="lighting"><option value="daylight">Daylight</option><option value="indoor" selected>Indoor</option><option value="low">Low light</option></select></div><p>Hold 30–45 cm away. Look at each blue dot without touching the screen. Keep the phone still.</p></div>
       <div class="panel"><div><h3>Live camera preview</h3><p>Keep your face in frame.</p></div><div class="preview"><video id="video" playsinline autoplay muted></video><small>On device</small></div></div>
     </div>
     <p class="notice">Experimental research prototype. Approximate left/right iris-based attention is not a measure of unconscious desire, personality or pupil diameter. Results are exploratory, not diagnostic. Camera frames are processed locally; model assets load online. Gaze data can be exported by you.</p>
