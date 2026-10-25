@@ -158,10 +158,13 @@ function runEyeMovementTest(){
  const readings=[];let index=0,bucket=[],started=performance.now();
  const label=el("div","hd-kicker","SINGLE EYE / SIGNAL DIAGNOSTIC");
  const title=el("h2","hd-title","Follow the moving target.");
- const note=el("p","hd-description","Move only your eyes toward the dot. Keep your head as still as comfortable. This tests iris signal direction before screen calibration.");
+ const note=el("p","hd-description","Follow each dot with your eyes, not your head. Live X/Y measurements below should change as you look around. If they stay flat, calibration cannot be trusted.");
  const area=el("div","hd-calibration-area"),dot=el("div","hd-calibration-dot");
  const status=el("p","hd-eye-status","Waiting for eye signal…");
- area.append(dot);body.replaceChildren(label,title,note,area,status,button("Back to eye check",()=>{clearInterval(calibrationTimer);eyeCheck();},true));
+ const live=el("div","hd-eye-status","Live iris movement: waiting…");
+ const meter=el("div","hd-eye-status","Horizontal: — · Vertical: — · Head: —");
+ const liveSamples=[];
+ area.append(dot);body.replaceChildren(label,title,note,area,live,meter,status,button("Back to eye check",()=>{clearInterval(calibrationTimer);eyeCheck();},true));
  const mode=selectedEyeMode,token=galleryToken;
  calibrationTimer=setInterval(()=>{
   if(!eye||root.hidden||galleryToken!==token){clearInterval(calibrationTimer);return;}
@@ -170,6 +173,13 @@ function runEyeMovementTest(){
   dot.style.left=step.x*100+"%";dot.style.top=step.y*100+"%";
   status.textContent="Target "+(index+1)+" / "+steps.length+" · "+step.name+" · "+bucket.length+" samples";
   const f=feature(eye.latest,mode);
+  if(f&&now-eye.latest.t<400){
+   liveSamples.push({x:f[0],y:f[1],hx:f[2],hy:f[3]});
+   if(liveSamples.length>12)liveSamples.shift();
+   const base=liveSamples[0],sx=f[0]-base.x,sy=f[1]-base.y;
+   live.textContent="Live iris signal · X "+f[0].toFixed(3)+" · Y "+f[1].toFixed(3);
+   meter.textContent="Change from recent baseline · horizontal "+sx.toFixed(3)+" · vertical "+sy.toFixed(3)+" · head "+Math.hypot(f[2]-base.hx,f[3]-base.hy).toFixed(3);
+  }else{live.textContent="Eye signal lost — improve indirect lighting and keep eye visible.";}
   if(now-started>350&&f&&now-eye.latest.t<400)bucket.push({f,t:now,head:eye.latest.head,iris:mode==="right"?eye.latest.right:eye.latest.left});
   if(now-started>=1600){
    const median=k=>{const values=bucket.map(p=>p.f[k]).sort((a,b)=>a-b);return values.length?values[Math.floor(values.length/2)]:null;};
