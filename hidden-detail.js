@@ -95,7 +95,7 @@ function showIntro(){
  const desc=el("p","hd-description","A visual search experiment disguised as an art mystery. Discover how efficiently you find a detail inside increasingly complex scenes.");
  const sample=el("div","hd-intro-art");
  sample.innerHTML='<svg viewBox="0 0 560 140" aria-hidden="true"><rect width="560" height="140" rx="16" fill="#182b37"/><circle cx="96" cy="70" r="45" fill="#c0a06c"/><path d="M210 30 Q260 90 210 120 Q160 90 210 30" fill="#8cae9a"/><path d="M320 30 Q400 65 320 110 Q270 65 320 30" fill="#b7746d"/><circle cx="466" cy="70" r="43" fill="#536b76"/><path d="M466 43 A27 27 0 1 0 466 97 A20 20 0 1 1 466 43Z" fill="#f2d28c"/></svg>';
- const note=el("p","hd-note","Four artworks · Find a different target each time · Tap where you find it. No camera permission required. Your results stay on this device unless you export them.");
+ const note=el("p","hd-note","Four artworks · Find a different target each time · Tap where you find it. Camera is optional. Your results stay on this device unless you export them.");
  const opt=el("label","hd-eye-toggle");const check=document.createElement("input");check.type="checkbox";opt.append(check,document.createTextNode(" Include experimental eye movement data"));
  const caution=el("p","hd-note","Optional camera-based iris signal, processed on-device. No camera frames are saved. This is not precise gaze localization.");
  const launch=button("Enter the gallery",async()=>{launch.disabled=true;if(check.checked&&!await enableEyes()){caution.textContent="Camera unavailable. Uncheck eye tracking to continue.";launch.disabled=false;return;}startGame();});
