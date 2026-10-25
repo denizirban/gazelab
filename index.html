@@ -99,6 +99,45 @@
     .choiceOverlay .choiceCards{flex-shrink:0}
     .choiceOverlay .choiceCard{transition:box-shadow .18s ease,transform .18s ease}
     @media(max-width:699px){.intro{margin-bottom:14px}.intro h1{font-size:clamp(32px,9vw,42px)}.intro .subtitle{font-size:13px}.choiceOverlay{padding:15px 12px;justify-content:safe center}.choiceOverlay .choiceCards{gap:9px}.choiceOverlay .choiceCard{min-height:132px;padding:12px;font-size:14px}.choiceOverlay .choiceResult{font-size:12px;line-height:1.5}}
+
+    .hd-entry{margin:0 0 14px;padding:20px 22px;border-radius:22px;background:#182c38;color:#f7f0df;display:flex;align-items:center;justify-content:space-between;gap:15px;box-shadow:0 14px 40px #12253118}
+    .hd-entry .hd-eyebrow{font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:#d3b985;font-weight:700}
+    .hd-entry h2{font-size:25px;letter-spacing:-.04em;margin:7px 0 5px}
+    .hd-entry p{font-size:12px;line-height:1.6;color:#c7d1d1;margin:0;max-width:450px}
+    .hd-entry button{background:#e9c88d;border:0;color:#1a2b36;font-size:13px;font-weight:750;border-radius:13px;padding:13px 16px;cursor:pointer;white-space:nowrap}
+    .hd-lock{overflow:hidden}
+    .hd-modal{position:fixed;inset:0;z-index:1000;background:#0c1721e8;display:flex;align-items:center;justify-content:center;padding:12px}
+    .hd-modal[hidden]{display:none!important}
+    .hd-panel{position:relative;background:#f9f7f2;color:#202d34;width:min(100%,800px);max-height:min(95dvh,900px);overflow-y:auto;border-radius:25px;padding:28px;box-shadow:0 24px 90px #0005;overscroll-behavior:contain}
+    .hd-close{position:sticky;top:0;float:right;border:0;background:#e8e6df;color:#25323b;border-radius:100%;width:34px;height:34px;font-size:22px;line-height:1;cursor:pointer;z-index:5}
+    .hd-body{display:flex;flex-direction:column;gap:14px;clear:both}
+    .hd-kicker{font-size:10px;font-weight:750;letter-spacing:.19em;color:#8c704b}
+    .hd-title{font-size:clamp(29px,5vw,47px);line-height:1.05;letter-spacing:-.055em;margin:2px 0}
+    .hd-description{font-size:14px;line-height:1.7;color:#657078;margin:0;max-width:610px}
+    .hd-intro-art svg{display:block;width:100%;border-radius:16px}
+    .hd-note{font-size:12px;line-height:1.6;color:#737b80}
+    .hd-button{padding:13px 18px;background:#213944;color:white;border:0;border-radius:12px;font-weight:700;cursor:pointer;align-self:flex-start}
+    .hd-secondary{background:#e9e7df;color:#263941}
+    .hd-round-head{display:flex;align-items:center;justify-content:space-between}
+    .hd-round-title{font-size:clamp(22px,4vw,32px);letter-spacing:-.04em;margin:0}
+    .hd-help,.hd-feedback{font-size:12px;color:#68767a;margin:0}
+    .hd-timer{font-variant-numeric:tabular-nums;font-size:19px;font-weight:750;color:#283b45}
+    .hd-art-shell,.hd-reveal{position:relative;width:100%;background:#182b37;border-radius:15px;overflow:hidden;touch-action:manipulation}
+    .hd-art-shell{cursor:crosshair}
+    .hd-artwork{display:block;width:100%;height:auto;max-height:55dvh}
+    .hd-reveal .hd-artwork{max-height:45dvh}
+    .hd-miss{position:absolute;width:28px;height:28px;border:2px solid #e7ad93;border-radius:50%;transform:translate(-50%,-50%);pointer-events:none;animation:hdflash .45s ease-out forwards}
+    @keyframes hdflash{to{opacity:0;transform:translate(-50%,-50%) scale(1.8)}}
+    .hd-target-ring{animation:hdpulse 1.2s ease-in-out infinite alternate}
+    @keyframes hdpulse{to{stroke-width:9;opacity:.5}}
+    .hd-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+    .hd-stat{padding:16px 10px;background:#eeece5;border-radius:14px;text-align:center}
+    .hd-stat strong{font-size:24px;display:block;font-variant-numeric:tabular-nums}
+    .hd-stat span{font-size:10px;color:#6c7579}
+    .hd-results-list{display:grid;gap:8px}
+    .hd-result-line{display:flex;justify-content:space-between;gap:10px;padding:11px 2px;border-bottom:1px solid #e2dfd6;font-size:12px}
+    .hd-result-actions{display:flex;gap:8px;flex-wrap:wrap}
+    @media(max-width:699px){.hd-entry{padding:16px;align-items:flex-start;flex-direction:column}.hd-entry h2{font-size:23px}.hd-modal{padding:0}.hd-panel{max-height:100dvh;height:100dvh;border-radius:0;padding:16px}.hd-artwork{max-height:55dvh}.hd-stat strong{font-size:19px}}
     @media(prefers-reduced-motion:reduce){*,*:before,*:after{transition:none!important;animation:none!important}}
   </style>
 </head>
@@ -106,6 +145,7 @@
   <main class="shell">
     <header><div class="brand">Gaze Lab <small>IRISPECTRA</small></div><div class="tag">Experimental · On-device</div></header>
     <div class="intro"><div class="eyebrow">The Decision Lab</div><h1>Your eyes.<br>Your choice.</h1><p class="subtitle">Explore how visual attention and decisions interact. No nine-point calibration required for the choice experiment.</p></div>
+    <section class="hd-entry" aria-label="The Hidden Detail visual search game"><div><div class="hd-eyebrow">New · Art × Attention</div><h2>The Hidden Detail</h2><p>Find the impossible detail. Four original artworks, progressively harder visual search, and your own attention report.</p></div><button id="hiddenDetailStart" type="button">Explore the gallery</button></section>
     <section class="workspace" aria-label="Gaze tracking study area">
       <div class="board" id="board">
         <div class="alignment" id="alignment" hidden><div class="faceOval" id="faceOval"><span class="eyeGuide"></span></div><div class="alignmentText" id="alignmentText">Position your face</div></div><div class="centerInfo" id="centerInfo"><div class="introIcon" aria-hidden="true">◎</div><h2>Discover how you decide.</h2><p>Start Your Eyes vs Your Choice for a quick direction check, then explore your attention and decisions.</p></div>
@@ -133,6 +173,8 @@
     <p class="notice">Experimental research prototype. Approximate left/right iris-based attention is not a measure of unconscious desire, personality or pupil diameter. Results are exploratory, not diagnostic. Camera frames are processed locally; model assets load online. Gaze data can be exported by you.</p>
     <footer><span>GAZE LAB</span><span>DECISION LAB · BETA</span><span>ON-DEVICE PROCESSING</span></footer>
   </main>
+  <div class="hd-modal" id="hiddenDetailModal" hidden role="dialog" aria-modal="true" aria-label="The Hidden Detail visual search experiment"><div class="hd-panel"><button class="hd-close" type="button" aria-label="Close gallery">×</button><div class="hd-body"></div></div></div>
   <script src="./app.js" defer></script>
+  <script src="./hidden-detail.js" defer></script>
 </body>
 </html>
