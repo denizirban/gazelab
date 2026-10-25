@@ -94,8 +94,8 @@ function predictGaze(model,f){
 function runCalibration(){
  clearInterval(calibrationTimer);
  if(!eye){startGame();return;}
- const training=[[.12,.15],[.5,.15],[.88,.15],[.12,.5],[.5,.5],[.88,.5],[.12,.85],[.5,.85],[.88,.85]];
- const validation=[[.28,.32],[.74,.3],[.47,.67],[.26,.73],[.75,.74]];
+ const training=[[.12,.15],[.88,.15],[.5,.5],[.12,.85],[.88,.85],[.5,.15],[.5,.85]];
+ const validation=[[.28,.32],[.74,.3],[.47,.67]];
  const steps=[...training,...validation];
  const samples=[],errors=[];
  const calibrationMode=selectedEyeMode;
@@ -103,7 +103,7 @@ function runCalibration(){
  body.replaceChildren();
  const label=el("div","hd-kicker","EYE TRACKING / CALIBRATION");
  const title=el("h2","hd-title","Follow the dot.");
- const text=el("p","hd-description","Keep your phone steady and look directly at each dot until it moves. Nine training targets, then five new validation targets.");
+ const text=el("p","hd-description","Keep your phone steady and look directly at each dot until it moves. Seven quick training targets, then three independent validation targets.");
  const area=el("div","hd-calibration-area");
  const dot=el("div","hd-calibration-dot");area.append(dot);
  const progress=el("div","hd-eye-status","");
@@ -117,10 +117,10 @@ function runCalibration(){
   const point=steps[index],now=performance.now(),elapsed=now-started;
   dot.style.left=(point[0]*100)+"%";dot.style.top=(point[1]*100)+"%";
   const validationMode=index>=training.length;
-  label.textContent=validationMode?"INDEPENDENT VALIDATION":"9-POINT CALIBRATION";
-  progress.textContent=(validationMode?"Validation "+(index-8)+" / 5":"Calibration "+(index+1)+" / 9");
-  if(elapsed>420&&eye.latest&&now-eye.latest.t<450){const f=feature(eye.latest,calibrationMode);if(f)bucket.push(f);}
-  if(elapsed>=1900){
+  label.textContent=validationMode?"INDEPENDENT VALIDATION":"QUICK ART CALIBRATION";
+  progress.textContent=(validationMode?"Validation "+(index-training.length+1)+" / "+validation.length:"Calibration "+(index+1)+" / "+training.length);
+  if(elapsed>250&&eye.latest&&now-eye.latest.t<450){const f=feature(eye.latest,calibrationMode);if(f)bucket.push(f);}
+  if(elapsed>=1250){
    if(bucket.length>=5){
     const f=[0,1,2,3].map(j=>{const a=bucket.map(p=>p[j]).sort((a,b)=>a-b);return a[Math.floor(a.length/2)];});
     const bounds=area.getBoundingClientRect();const screenPoint=[(bounds.left+point[0]*bounds.width)/innerWidth,(bounds.top+point[1]*bounds.height)/innerHeight];
@@ -137,11 +137,11 @@ function runCalibration(){
   const valid=distances.filter(Number.isFinite).sort((a,b)=>a-b);
   const median=valid.length?valid[Math.floor(valid.length/2)]:null;
   const max=valid.length?valid[valid.length-1]:null;
-  const passed=!!model&&samples.length>=7&&valid.length>=4&&median<=12&&max<=22;
+  const passed=!!model&&samples.length>=7&&valid.length>=3&&median<=12&&max<=22;
   eye.calibration=model?{...model,passed,validationMedianErrorPct:median===null?null:Math.round(median*10)/10,validationMaxErrorPct:max===null?null:Math.round(max*10)/10,trainingPoints:samples.length,validationPoints:valid.length}:null;
   body.replaceChildren();
   body.append(el("div","hd-kicker","VALIDATION RESULTS"),el("h2","hd-title",passed?"Gaze map ready.":"Calibration needs improvement."));
-  body.append(el("p","hd-description",median===null?"Not enough valid samples.":("Median validation error: "+median.toFixed(1)+"% of screen diagonal. Maximum: "+max.toFixed(1)+"%. Acceptance requires median ≤12%, maximum ≤22%, and four valid validation points.")));
+  body.append(el("p","hd-description",median===null?"Not enough valid samples.":("Median validation error: "+median.toFixed(1)+"% of screen diagonal. Maximum: "+max.toFixed(1)+"%. Acceptance requires median ≤12%, maximum ≤22%, and three valid validation points.")));
   body.append(el("p","hd-note",passed?"Experimental gaze coordinates will be saved in normalized screen space. This does not establish clinical-grade accuracy.":"No gaze coordinates will be exported from this attempt. You can retry or continue with iris signal and touch data."));
   body.append(button("Continue to gallery",startGame),button("Retry calibration",runCalibration,true),button("Touch only",()=>{stopEyes();startGame();},true));
  }
@@ -159,16 +159,16 @@ function eyeCheck(){
  const oval=el("div","hd-check-oval");frame.append(oval);
  const status=el("div","hd-eye-status","Checking face and iris landmarks…");
  const picker=el("div","hd-eye-mode");
- const heading=el("p","hd-note","Select which eye signal to calibrate. Keep both eyes open.");
+ const heading=el("p","hd-note","Single-eye focus uses the left iris by default. Keep both eyes open and use soft, indirect lighting.");
  const options=[["left","Left eye"],["right","Right eye"],["both","Both eyes"]];
  options.forEach(([value,label])=>{
   const b=button(label,()=>{selectedEyeMode=value;eye.mode=value;picker.querySelectorAll("button").forEach(n=>n.classList.toggle("hd-mode-selected",n===b));valid=0;next.disabled=true;});
   b.classList.toggle("hd-mode-selected",selectedEyeMode===value);picker.append(b);
  });
  eye.mode=selectedEyeMode;
- const next=button("Calibrate gaze (9 points)",()=>{clearInterval(eyeCheckTimer);runCalibration();});next.disabled=true;
+ const next=button("Quick gaze calibration",()=>{clearInterval(eyeCheckTimer);runCalibration();});next.disabled=true;
  const retry=button("Continue without eye data",()=>{clearInterval(eyeCheckTimer);stopEyes();startGame();},true);
- body.append(kicker,title,desc,frame,heading,picker,status,next,retry);
+ body.append(kicker,title,desc,frame,heading,status,next,retry);
  let valid=0,attempts=0;
  eyeCheckTimer=setInterval(()=>{
   if(!eye){clearInterval(eyeCheckTimer);return;}
@@ -421,7 +421,7 @@ function showResults(){
  [["Found",success.length+" / 4"],["Average find time",mean===null?"—":mean.toFixed(1)+"s"],["Missed taps",rows.reduce((a,r)=>a+r.misses,0)]].forEach(([label,value])=>{const card=el("div","hd-stat");card.append(el("strong","",value),el("span","",label));stats.append(card);});
  const detail=el("div","hd-results-list");
  rows.forEach(r=>{const line=el("div","hd-result-line");line.append(el("span","",String(r.round).padStart(2,"0")+" · "+(r.artwork?r.artwork.title:session.order[r.round-1].label)),el("strong","",r.correct?(r.searchTimeMs/1000).toFixed(1)+"s":"Skipped"));detail.append(line);});
- const explain=el("p","hd-note","Measured: touch-based target localization, response time and missed taps. Not measured: precise eye fixation, saccades, or Alzheimer's/Parkinson's risk. Repeated play introduces learning effects.");
+ const explain=el("p","hd-note","Measured: touch responses and experimental eye signal. Regional gaze summaries appear only when independent validation passes; they are approximate sample distributions, not proven fixations or psychological diagnoses.");
  const actions=el("div","hd-result-actions");
  actions.append(button("Play another gallery",startGame),button("Export session JSON",exportData,true));
  const good=rows.filter(r=>r.eyeTracking?.status==="exploratory");
@@ -429,6 +429,18 @@ function showResults(){
  const eyeInfo=el("div","hd-eye-report");
  if(calibrationSummary)eyeInfo.append(el("p","",calibrationSummary.passed?"Independent validation passed · median "+calibrationSummary.medianErrorPct+"% of viewport diagonal.":"Independent validation failed · gaze coordinates excluded."));
  eyeInfo.append(el("strong","","Eye signal quality"),el("p","",good.length?good.length+" / 4 rounds recorded · "+avgCoverage+"% mean valid sample coverage.":"Eye data unavailable or below the minimum sample count."));
+ const regionReport=el("div","hd-eye-report");
+ const validated=rows.filter(r=>r.eyeTracking?.calibration?.passed);
+ const bins=Array(9).fill(0);let inArt=0,allGaze=0;
+ validated.forEach(r=>(r.eyeTracking.samples||[]).forEach(p=>{if(!p.artwork)return;allGaze++;const {x,y}=p.artwork;if(x>=0&&x<=1&&y>=0&&y<=1){bins[Math.min(2,Math.floor(y*3))*3+Math.min(2,Math.floor(x*3))]++;inArt++;}}));
+ regionReport.append(el("strong","","Where did your attention go?"));
+ if(inArt>=20){
+  const labels=["top left","top center","top right","middle left","center","middle right","bottom left","bottom center","bottom right"];
+  const ranked=bins.map((count,i)=>({count,label:labels[i]})).sort((a,b)=>b.count-a.count);
+  regionReport.append(el("p","", "Most sampled region: "+ranked[0].label+" ("+Math.round(ranked[0].count/inArt*100)+"% of in-art gaze samples). Second: "+ranked[1].label+". "+inArt+" in-art samples; "+(allGaze-inArt)+" outside artwork. These percentages represent samples, not verified dwell time."));
+  regionReport.append(el("p","",ranked[0].count>ranked[1].count*1.5?"Your estimated gaze was concentrated in one region. This may reflect visual search strategy or artwork composition; it does not establish distraction.":"Your estimated gaze was distributed across several regions. This may reflect exploration rather than distraction."));
+ }else regionReport.append(el("p","","Not enough independently validated artwork gaze coordinates to describe attention by region. Iris motion was recorded separately; no attention map is inferred."));
+ eyeInfo.append(regionReport);
  const caveat=el("p","hd-note","Camera gaze estimates are experimental, and independent screen validation does not make them clinical or reference-grade measurements.");
  eyeInfo.append(caveat);
  const sources=el("div","hd-art-credits");
