@@ -61,28 +61,32 @@ function buildRealScene(round,loaded){
  return {svg,target:{x,y,r:size*.48},count:0,seed:session.seed,real:true,art,patch,canvas,size};
 }
 
-function solve3(a,b){
- const m=a.map((row,i)=>[...row,b[i]]);
- for(let c=0;c<3;c++){let pivot=c;for(let r=c+1;r<3;r++)if(Math.abs(m[r][c])>Math.abs(m[pivot][c]))pivot=r;
- if(Math.abs(m[pivot][c])<1e-10)return null;
- [m[c],m[pivot]]=[m[pivot],m[c]];
- const scale=m[c][c];for(let j=c;j<4;j++)m[c][j]/=scale;
- for(let r=0;r<3;r++)if(r!==c){const k=m[r][c];for(let j=c;j<4;j++)m[r][j]-=k*m[c][j];}
+function solveN(A,b){
+ const n=b.length,m=A.map((r,i)=>[...r,b[i]]);
+ for(let i=0;i<n;i++){
+  let p=i;for(let j=i+1;j<n;j++)if(Math.abs(m[j][i])>Math.abs(m[p][i]))p=j;
+  if(Math.abs(m[p][i])<1e-9)return null;
+  [m[p],m[i]]=[m[i],m[p]];
+  const v=m[i][i];for(let j=i;j<=n;j++)m[i][j]/=v;
+  for(let k=0;k<n;k++)if(k!==i){const q=m[k][i];for(let j=i;j<=n;j++)m[k][j]-=q*m[i][j];}
  }
- return m.map(row=>row[3]);
+ return m.map(r=>r[n]);
+}
+function feature(frame){
+ return frame&&Number.isFinite(frame.x)&&Number.isFinite(frame.y)&&frame.head?
+ [frame.x,frame.y,frame.head.cx,frame.head.cy]:null;
 }
 function fitGaze(points){
- const A=[[0,0,0],[0,0,0],[0,0,0]],bx=[0,0,0],by=[0,0,0];
- for(const p of points){const v=[1,p.f[0],p.f[1]];for(let i=0;i<3;i++){bx[i]+=v[i]*p.p[0];by[i]+=v[i]*p.p[1];for(let j=0;j<3;j++)A[i][j]+=v[i]*v[j];}}
- for(let i=0;i<3;i++)A[i][i]+=0.00001;
- const cx=solve3(A,bx),cy=solve3(A,by);
- return cx&&cy?{cx,cy}:null;
+ const n=5,A=Array.from({length:n},()=>Array(n).fill(0)),bx=Array(n).fill(0),by=Array(n).fill(0);
+ if(points.length<n+2)return null;
+ for(const p of points){const v=[1,...p.f];for(let i=0;i<n;i++){bx[i]+=v[i]*p.p[0];by[i]+=v[i]*p.p[1];for(let j=0;j<n;j++)A[i][j]+=v[i]*v[j];}}
+ for(let i=1;i<n;i++)A[i][i]+=0.000001;
+ const cx=solveN(A,bx),cy=solveN(A,by);return cx&&cy?{cx,cy,headCompensated:true}:null;
 }
 function predictGaze(model,f){
- if(!model||!f||!f.every(Number.isFinite))return null;
- const x=model.cx[0]+model.cx[1]*f[0]+model.cx[2]*f[1],y=model.cy[0]+model.cy[1]*f[0]+model.cy[2]*f[1];
- if(!Number.isFinite(x+y))return null;
- return {x:Math.round(x*10000)/10000,y:Math.round(y*10000)/10000};
+ if(!model||!f||f.length!==4)return null;
+ const v=[1,...f],x=model.cx.reduce((a,b,i)=>a+b*v[i],0),y=model.cy.reduce((a,b,i)=>a+b*v[i],0);
+ return Number.isFinite(x+y)?{x:Math.round(x*10000)/10000,y:Math.round(y*10000)/10000}:null;
 }
 function runCalibration(){
  clearInterval(calibrationTimer);
@@ -111,11 +115,10 @@ function runCalibration(){
   const validationMode=index>=training.length;
   label.textContent=validationMode?"INDEPENDENT VALIDATION":"9-POINT CALIBRATION";
   progress.textContent=(validationMode?"Validation "+(index-8)+" / 5":"Calibration "+(index+1)+" / 9");
-  if(elapsed>420&&eye.latest&&now-eye.latest.t<450)bucket.push([eye.latest.x,eye.latest.y]);
+  if(elapsed>420&&eye.latest&&now-eye.latest.t<450){const f=feature(eye.latest);if(f)bucket.push(f);}
   if(elapsed>=1900){
    if(bucket.length>=5){
-    const sortedX=bucket.map(p=>p[0]).sort((a,b)=>a-b),sortedY=bucket.map(p=>p[1]).sort((a,b)=>a-b);
-    const f=[sortedX[Math.floor(sortedX.length/2)],sortedY[Math.floor(sortedY.length/2)]];
+    const f=[0,1,2,3].map(j=>{const a=bucket.map(p=>p[j]).sort((a,b)=>a-b);return a[Math.floor(a.length/2)];});
     const bounds=area.getBoundingClientRect();const screenPoint=[(bounds.left+point[0]*bounds.width)/innerWidth,(bounds.top+point[1]*bounds.height)/innerHeight];
     if(validationMode)errors.push({p:screenPoint,f});else samples.push({p:screenPoint,f});
    }else if(validationMode)errors.push({p:point,f:null});
@@ -223,7 +226,7 @@ function endEyeRound(record){
  longestValidSampleGapMs:gaps.length?Math.max(...gaps):null,
   horizontalSignalRange:xs.length?Math.max(...xs)-Math.min(...xs):null,
   headMovementRange:hs.length?Math.max(...hs)-Math.min(...hs):null,
-  samples:data.map(p=>{const gaze=eye.calibration?.passed&&p.x!==null&&p.y!==null?predictGaze(eye.calibration,[p.x,p.y]):null;const bounds=record.artworkBounds;const artwork=gaze&&bounds?{x:(gaze.x*innerWidth-bounds.left)/bounds.width,y:(gaze.y*innerHeight-bounds.top)/bounds.height}:null;return {t:p.t,x:p.x,y:p.y,gaze,artwork:artwork&&Number.isFinite(artwork.x+artwork.y)?{x:Math.round(artwork.x*10000)/10000,y:Math.round(artwork.y*10000)/10000}:null};}),
+  samples:data.map(p=>{const gaze=eye.calibration?.passed&&p.x!==null&&p.y!==null?predictGaze(eye.calibration,feature(p)):null;const bounds=record.artworkBounds;const artwork=gaze&&bounds?{x:(gaze.x*innerWidth-bounds.left)/bounds.width,y:(gaze.y*innerHeight-bounds.top)/bounds.height}:null;return {t:p.t,x:p.x,y:p.y,gaze,artwork:artwork&&Number.isFinite(artwork.x+artwork.y)?{x:Math.round(artwork.x*10000)/10000,y:Math.round(artwork.y*10000)/10000}:null};}),
   calibration:eye.calibration?{passed:eye.calibration.passed,validationMedianErrorPct:eye.calibration.validationMedianErrorPct,validationMaxErrorPct:eye.calibration.validationMaxErrorPct}:null,
   note:"Exploratory camera gaze estimate only when independently validated; not a clinical or reference-grade measurement."
  };
