@@ -112,7 +112,8 @@ function runCalibration(){
    if(bucket.length>=5){
     const sortedX=bucket.map(p=>p[0]).sort((a,b)=>a-b),sortedY=bucket.map(p=>p[1]).sort((a,b)=>a-b);
     const f=[sortedX[Math.floor(sortedX.length/2)],sortedY[Math.floor(sortedY.length/2)]];
-    if(validationMode)errors.push({p:point,f});else samples.push({p:point,f});
+    const bounds=area.getBoundingClientRect();const screenPoint=[(bounds.left+point[0]*bounds.width)/innerWidth,(bounds.top+point[1]*bounds.height)/innerHeight];
+    if(validationMode)errors.push({p:screenPoint,f});else samples.push({p:screenPoint,f});
    }else if(validationMode)errors.push({p:point,f:null});
    index++;bucket=[];started=now;
   }
@@ -218,7 +219,7 @@ function endEyeRound(record){
  longestValidSampleGapMs:gaps.length?Math.max(...gaps):null,
   horizontalSignalRange:xs.length?Math.max(...xs)-Math.min(...xs):null,
   headMovementRange:hs.length?Math.max(...hs)-Math.min(...hs):null,
-  samples:data.map(p=>({t:p.t,x:p.x,y:p.y,gaze:eye.calibration?.passed&&p.x!==null&&p.y!==null?predictGaze(eye.calibration,[p.x,p.y]):null})),
+  samples:data.map(p=>{const gaze=eye.calibration?.passed&&p.x!==null&&p.y!==null?predictGaze(eye.calibration,[p.x,p.y]):null;const bounds=record.artworkBounds;const artwork=gaze&&bounds?{x:(gaze.x*innerWidth-bounds.left)/bounds.width,y:(gaze.y*innerHeight-bounds.top)/bounds.height}:null;return {t:p.t,x:p.x,y:p.y,gaze,artwork:artwork&&Number.isFinite(artwork.x+artwork.y)?{x:Math.round(artwork.x*10000)/10000,y:Math.round(artwork.y*10000)/10000}:null};}),
   calibration:eye.calibration?{passed:eye.calibration.passed,validationMedianErrorPct:eye.calibration.validationMedianErrorPct,validationMaxErrorPct:eye.calibration.validationMaxErrorPct}:null,
   note:"Exploratory camera gaze estimate only when independently validated; not a clinical or reference-grade measurement."
  };
@@ -242,7 +243,7 @@ function showIntro(){
  const launch=button("Enter the gallery",async()=>{launch.disabled=true;if(check.checked&&!await enableEyes()){caution.textContent="Camera unavailable. Uncheck eye tracking to continue.";launch.disabled=false;return;}if(check.checked)eyeCheck();else startGame();});
  body.append(kicker,title,desc,sample,note,opt,caution,launch);
 }
-function startGame(){
+function startGame(){clearInterval(calibrationTimer);
  const seed=(globalThis.crypto?.getRandomValues?crypto.getRandomValues(new Uint32Array(1))[0]:Date.now()>>>0);
  const random=rand(seed);
  const order=[...targets];for(let i=order.length-1;i>0;i--){const j=Math.floor(random()*(i+1));[order[i],order[j]]=[order[j],order[i]];}
@@ -305,6 +306,7 @@ async function nextRound(){
  bottom.append(skip);if(eye)bottom.append(signal);
  if(scene.real){const targetCard=el("div","hd-fragment");targetCard.append(el("span","","FIND THIS FRAGMENT"),scene.patch);body.append(head,title,help,targetCard,art,feedback,bottom);}else body.append(head,title,help,art,feedback,bottom);
  const start=performance.now();session.active.start=start;beginEyeRound();
+ if(eye?.calibration?.passed){record.gazeCoordinateSystem="normalized-viewport";record.artworkBounds={left:svg.getBoundingClientRect().left,top:svg.getBoundingClientRect().top,width:svg.getBoundingClientRect().width,height:svg.getBoundingClientRect().height};}
  function clock(now){
   if(!session||session.active?.record!==record)return;
   time.textContent=((now-start)/1000).toFixed(1)+"s";
