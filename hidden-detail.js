@@ -501,6 +501,28 @@ function showResults(){
  [["Found",success.length+" / 4"],["Average find time",mean===null?"—":mean.toFixed(1)+"s"],["Missed taps",rows.reduce((a,r)=>a+r.misses,0)]].forEach(([label,value])=>{const card=el("div","hd-stat");card.append(el("strong","",value),el("span","",label));stats.append(card);});
  const detail=el("div","hd-results-list");
  rows.forEach(r=>{const line=el("div","hd-result-line");line.append(el("span","",String(r.round).padStart(2,"0")+" · "+(r.artwork?r.artwork.title:session.order[r.round-1].label)),el("strong","",r.correct?(r.searchTimeMs/1000).toFixed(1)+"s":"Skipped"));detail.append(line);});
+ const touchReport=el("div","hd-eye-report");
+ touchReport.append(el("strong","","Your Visual Search Report"));
+ if(success.length){
+  const times=success.map(r=>r.searchTimeMs/1000).sort((a,b)=>a-b);
+  const median=times.length%2?times[(times.length-1)/2]:(times[times.length/2-1]+times[times.length/2])/2;
+  const fastest=success.reduce((a,b)=>a.searchTimeMs<=b.searchTimeMs?a:b);
+  const slowest=success.reduce((a,b)=>a.searchTimeMs>=b.searchTimeMs?a:b);
+  const misses=rows.reduce((n,r)=>n+r.misses,0);
+  const total=rows.reduce((n,r)=>n+r.searchTimeMs,0)/1000;
+  touchReport.append(el("p","", "Median discovery time: "+median.toFixed(1)+"s · Total gallery time: "+total.toFixed(1)+"s · Missed taps per completed artwork: "+(misses/success.length).toFixed(1)+"."));
+  touchReport.append(el("p","", "Quickest discovery: "+(fastest.artwork?.title||"Artwork "+fastest.round)+" ("+(fastest.searchTimeMs/1000).toFixed(1)+"s). Longest successful search: "+(slowest.artwork?.title||"Artwork "+slowest.round)+" ("+(slowest.searchTimeMs/1000).toFixed(1)+"s)."));
+  const summary=el("div","hd-results-list");
+  rows.forEach(r=>{
+   const row=el("div","hd-result-line");
+   const name=r.artwork?.title||"Artwork "+r.round;
+   const secs=(r.searchTimeMs/1000).toFixed(1);
+   row.append(el("span","",name+" · "+r.misses+" missed taps"),el("strong","",secs+"s"+(r.correct?"":" · skipped")));
+   summary.append(row);
+  });
+  touchReport.append(el("strong","","Artwork-by-artwork exploration"),summary);
+  touchReport.append(el("p","hd-note","These metrics describe taps and task completion, not where you looked or how long you fixated. Artwork difficulty varies, so times are not directly comparable across different paintings."));
+ }else touchReport.append(el("p","","No completed searches yet. Finish an artwork to unlock timing and touch insights."));
  const explain=el("p","hd-note","Measured: touch responses and experimental eye signal. Regional gaze summaries appear only when independent validation passes; they are approximate sample distributions, not proven fixations or psychological diagnoses.");
  const actions=el("div","hd-result-actions");
  actions.append(button("Play another gallery",startGame),button("Export session JSON",exportData,true));
@@ -526,7 +548,7 @@ function showResults(){
  const sources=el("div","hd-art-credits");
  sources.append(el("strong","","Artworks & credits"));
  rows.forEach(r=>{if(!r.artwork)return;const a=document.createElement("a");a.href=r.artwork.source;a.target="_blank";a.rel="noopener noreferrer";a.textContent=r.artwork.artist+" · "+r.artwork.title;sources.append(a);});
- body.append(kicker,title,note,stats,detail,eyeInfo,sources,explain,actions);
+ body.append(kicker,title,note,stats,detail,touchReport,eyeInfo,sources,explain,actions);
 }
 function exportData(){
  if(!session)return;
