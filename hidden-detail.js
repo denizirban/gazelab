@@ -216,6 +216,47 @@ function runEyeMovementTest(){
   },true);body.append(download);
  }
 }
+function eyeCameraMicroscope(){
+ clearInterval(eyeCheckTimer);clearInterval(calibrationTimer);
+ if(!eye){eyeCheck();return;}
+ const label=el("div","hd-kicker","IRISPECTRA / EYE CAMERA MICROSCOPE");
+ const title=el("h2","hd-title","See what the camera sees.");
+ const note=el("p","hd-description","Live enlarged eye crop with MediaPipe landmarks. Move your eyes slowly left, right, up and down. The green dot should follow the iris. This is a diagnostic preview, not a validated gaze estimate.");
+ const canvas=document.createElement("canvas");canvas.width=720;canvas.height=360;
+ canvas.style.cssText="display:block;width:100%;max-width:720px;aspect-ratio:2/1;border-radius:14px;background:#111;object-fit:contain";
+ const info=el("p","hd-eye-status","Waiting for landmarks…");
+ const quality=el("p","hd-note","Use diffuse light facing your face. Never shine a flashlight directly into your eyes.");
+ const switcher=button("Switch eye",()=>{selectedEyeMode=selectedEyeMode==="left"?"right":"left";},true);
+ const back=button("Back to signal check",()=>{cancelAnimationFrame(microscopeFrame);eyeCheck();},true);
+ const test=button("Run movement test",()=>{cancelAnimationFrame(microscopeFrame);runEyeMovementTest();});
+ body.replaceChildren(label,title,note,canvas,info,quality,switcher,test,back);
+ const ctx=canvas.getContext("2d");let microscopeFrame=0,prevX=null,prevY=null;
+ const draw=()=>{
+  if(!eye||root.hidden||!canvas.isConnected)return;
+  const video=eye.video,lm=eye.lastLandmarks;
+  ctx.fillStyle="#111";ctx.fillRect(0,0,720,360);
+  const left=selectedEyeMode!=="right";
+  const ids=left?[33,133,159,145,468]:[362,263,386,374,473];
+  const pts=lm&&ids.every(i=>lm[i])?ids.map(i=>lm[i]):null;
+  if(video.readyState>=2&&video.videoWidth&&video.videoHeight){
+   const w=video.videoWidth,h=video.videoHeight;
+   let cx=w*.5,cy=h*.43,sw=w*.48,sh=h*.24;
+   if(pts){cx=(pts[0].x+pts[1].x)*w/2;cy=(pts[0].y+pts[1].y)*h/2;sw=Math.max(55,Math.hypot((pts[1].x-pts[0].x)*w,(pts[1].y-pts[0].y)*h)*2.7);sh=sw/2;}
+   const sx=Math.max(0,Math.min(w-sw,cx-sw/2)),sy=Math.max(0,Math.min(h-sh,cy-sh/2));
+   try{ctx.drawImage(video,sx,sy,sw,sh,0,0,720,360);}catch(_){}
+   if(pts){
+    pts.forEach((p,i)=>{const px=(p.x*w-sx)/sw*720,py=(p.y*h-sy)/sh*360;ctx.beginPath();ctx.arc(px,py,i===4?8:4,0,Math.PI*2);ctx.fillStyle=i===4?"#52edb2":"#ffd66e";ctx.fill();});
+    const iris=left?eye.latest?.left:eye.latest?.right;
+    const detected=!!iris&&performance.now()-(eye.latest?.t||0)<550;
+    info.textContent=(left?"LEFT":"RIGHT")+" EYE · "+(detected?"IRIS DETECTED":"NO IRIS SIGNAL")+" · processing "+(eye.actualFps||0).toFixed(1)+" fps";
+    quality.textContent=detected?"Iris X "+iris.x.toFixed(3)+" · Y "+iris.y.toFixed(3)+" · eye opening "+iris.eyeHeight.toFixed(3)+" · watch the green marker as your eye moves.":"Eye landmarks missing or stale. Try more even front lighting, a stable phone position, and moving slightly farther from the camera.";
+    if(detected){prevX=iris.x;prevY=iris.y;}
+   }else{info.textContent="FACE / EYE LANDMARKS NOT DETECTED · processing "+(eye.actualFps||0).toFixed(1)+" fps";quality.textContent="Make sure your full face is visible and softly lit. The camera crop cannot be positioned until landmarks are found.";}
+  }
+  microscopeFrame=requestAnimationFrame(draw);
+ };
+ microscopeFrame=requestAnimationFrame(draw);
+}
 function eyeCheck(){
  clearInterval(eyeCheckTimer);
  if(!eye){startGame();return;}
@@ -237,8 +278,9 @@ function eyeCheck(){
  eye.mode=selectedEyeMode;
  const next=button("Quick gaze calibration",()=>{clearInterval(eyeCheckTimer);runCalibration();});next.disabled=true;
  const retry=button("Continue without eye data",()=>{clearInterval(eyeCheckTimer);stopEyes();startGame();},true);
+ const microscope=button("Open Eye Camera Microscope",()=>{clearInterval(eyeCheckTimer);eyeCameraMicroscope();});
  const diagnostic=button("Test eye movement first",()=>{clearInterval(eyeCheckTimer);runEyeMovementTest();},true);
- body.append(kicker,title,desc,frame,heading,status,diagnostic,next,retry);
+ body.append(kicker,title,desc,frame,heading,status,microscope,diagnostic,next,retry);
  let valid=0,attempts=0;
  eyeCheckTimer=setInterval(()=>{
   if(!eye){clearInterval(eyeCheckTimer);return;}
@@ -264,7 +306,7 @@ async function enableEyes(){
   const opts={baseOptions:{modelAssetPath:"https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",delegate:"GPU"},runningMode:"VIDEO",numFaces:1};
   try{model=await mp.FaceLandmarker.createFromOptions(vision,opts);}
   catch(_){opts.baseOptions.delegate="CPU";model=await mp.FaceLandmarker.createFromOptions(vision,opts);}
-  eye={stream,video,model,timer:0,start:0,samples:[]};
+  eye={stream,video,model,timer:0,start:0,samples:[],lastLandmarks:null,frames:0,lastFrameAt:0,actualFps:0};
   eye.timer=setInterval(collectEyes,125);
   return true;
  }catch(_){if(model)model.close();if(stream)stream.getTracks().forEach(t=>t.stop());return false;}
@@ -281,6 +323,9 @@ function collectEyes(){
  const now=performance.now();
  try{
   const lm=eye.model.detectForVideo(eye.video,now).faceLandmarks?.[0];
+  eye.lastLandmarks=lm||null;
+  if(eye.lastFrameAt&&now>eye.lastFrameAt)eye.actualFps=eye.actualFps*.8+(.2*1000/(now-eye.lastFrameAt));
+  eye.lastFrameAt=now;eye.frames++;
   let x=null,y=null,head=null,left=null,right=null;
   if(lm&&lm.length>=478){
    const iris=(p,outer,inner,upper,lower)=>{
