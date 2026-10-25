@@ -26,6 +26,7 @@ let session=null,raf=0;
 let eye=null;
 let eyeCheckTimer=0;
 let galleryToken=0;
+let calibrationTimer=0;
 const realArtworks=[
  {title:"The Great Wave off Kanagawa",artist:"Katsushika Hokusai",file:"The_Great_Wave_off_Kanagawa.jpg",source:"https://commons.wikimedia.org/wiki/File:The_Great_Wave_off_Kanagawa.jpg"},
  {title:"Girl with a Pearl Earring",artist:"Johannes Vermeer",file:"Girl_with_a_Pearl_Earring.jpg",source:"https://commons.wikimedia.org/wiki/File:Girl_with_a_Pearl_Earring.jpg"},
@@ -55,6 +56,84 @@ function buildRealScene(round,loaded){
  const svg='<svg class="hd-artwork" viewBox="0 0 700 480" role="img" aria-label="Public domain painting with a hidden detail" preserveAspectRatio="xMidYMid meet"><image href="'+url.replaceAll("&","&amp;")+'" x="'+ox+'" y="'+oy+'" width="'+dw+'" height="'+dh+'"/></svg>';
  return {svg,target:{x,y,r:size*.48},count:0,seed:session.seed,real:true,art,patch,canvas,size};
 }
+
+function solve3(a,b){
+ const m=a.map((row,i)=>[...row,b[i]]);
+ for(let c=0;c<3;c++){let pivot=c;for(let r=c+1;r<3;r++)if(Math.abs(m[r][c])>Math.abs(m[pivot][c]))pivot=r;
+ if(Math.abs(m[pivot][c])<1e-10)return null;
+ [m[c],m[pivot]]=[m[pivot],m[c]];
+ const scale=m[c][c];for(let j=c;j<4;j++)m[c][j]/=scale;
+ for(let r=0;r<3;r++)if(r!==c){const k=m[r][c];for(let j=c;j<4;j++)m[r][j]-=k*m[c][j];}
+ }
+ return m.map(row=>row[3]);
+}
+function fitGaze(points){
+ const A=[[0,0,0],[0,0,0],[0,0,0]],bx=[0,0,0],by=[0,0,0];
+ for(const p of points){const v=[1,p.f[0],p.f[1]];for(let i=0;i<3;i++){bx[i]+=v[i]*p.p[0];by[i]+=v[i]*p.p[1];for(let j=0;j<3;j++)A[i][j]+=v[i]*v[j];}}
+ for(let i=0;i<3;i++)A[i][i]+=0.00001;
+ const cx=solve3(A,bx),cy=solve3(A,by);
+ return cx&&cy?{cx,cy}:null;
+}
+function predictGaze(model,f){
+ if(!model||!f||!f.every(Number.isFinite))return null;
+ const x=model.cx[0]+model.cx[1]*f[0]+model.cx[2]*f[1],y=model.cy[0]+model.cy[1]*f[0]+model.cy[2]*f[1];
+ if(!Number.isFinite(x+y))return null;
+ return {x:Math.round(x*10000)/10000,y:Math.round(y*10000)/10000};
+}
+function runCalibration(){
+ clearInterval(calibrationTimer);
+ if(!eye){startGame();return;}
+ const training=[[.12,.15],[.5,.15],[.88,.15],[.12,.5],[.5,.5],[.88,.5],[.12,.85],[.5,.85],[.88,.85]];
+ const validation=[[.28,.32],[.74,.3],[.47,.67],[.26,.73],[.75,.74]];
+ const steps=[...training,...validation];
+ const samples=[],errors=[];
+ let index=0;
+ body.replaceChildren();
+ const label=el("div","hd-kicker","EYE TRACKING / CALIBRATION");
+ const title=el("h2","hd-title","Follow the dot.");
+ const text=el("p","hd-description","Keep your phone steady and look directly at each dot until it moves. Nine training targets, then five new validation targets.");
+ const area=el("div","hd-calibration-area");
+ const dot=el("div","hd-calibration-dot");area.append(dot);
+ const progress=el("div","hd-eye-status","");
+ const skip=button("Use touch only",()=>{clearInterval(calibrationTimer);stopEyes();startGame();},true);
+ body.append(label,title,text,area,progress,skip);
+ const token=galleryToken;
+ let started=performance.now(),bucket=[];
+ function step(){
+  if(!eye||root.hidden||token!==galleryToken){clearInterval(calibrationTimer);return;}
+  if(index>=steps.length){clearInterval(calibrationTimer);finish();return;}
+  const point=steps[index],now=performance.now(),elapsed=now-started;
+  dot.style.left=(point[0]*100)+"%";dot.style.top=(point[1]*100)+"%";
+  const validationMode=index>=training.length;
+  label.textContent=validationMode?"INDEPENDENT VALIDATION":"9-POINT CALIBRATION";
+  progress.textContent=(validationMode?"Validation "+(index-8)+" / 5":"Calibration "+(index+1)+" / 9");
+  if(elapsed>420&&eye.latest&&now-eye.latest.t<450)bucket.push([eye.latest.x,eye.latest.y]);
+  if(elapsed>=1900){
+   if(bucket.length>=5){
+    const sortedX=bucket.map(p=>p[0]).sort((a,b)=>a-b),sortedY=bucket.map(p=>p[1]).sort((a,b)=>a-b);
+    const f=[sortedX[Math.floor(sortedX.length/2)],sortedY[Math.floor(sortedY.length/2)]];
+    if(validationMode)errors.push({p:point,f});else samples.push({p:point,f});
+   }else if(validationMode)errors.push({p:point,f:null});
+   index++;bucket=[];started=now;
+  }
+ }
+ calibrationTimer=setInterval(step,110);step();
+ function finish(){
+  const model=samples.length>=7?fitGaze(samples):null;
+  const distances=errors.map(p=>{const q=p.f&&model?predictGaze(model,p.f):null;return q?Math.hypot(q.x-p.p[0],q.y-p.p[1])/Math.SQRT2*100:null;});
+  const valid=distances.filter(Number.isFinite).sort((a,b)=>a-b);
+  const median=valid.length?valid[Math.floor(valid.length/2)]:null;
+  const max=valid.length?valid[valid.length-1]:null;
+  const passed=!!model&&samples.length>=7&&valid.length>=4&&median<=12&&max<=22;
+  eye.calibration=model?{...model,passed,validationMedianErrorPct:median===null?null:Math.round(median*10)/10,validationMaxErrorPct:max===null?null:Math.round(max*10)/10,trainingPoints:samples.length,validationPoints:valid.length}:null;
+  body.replaceChildren();
+  body.append(el("div","hd-kicker","VALIDATION RESULTS"),el("h2","hd-title",passed?"Gaze map ready.":"Calibration needs improvement."));
+  body.append(el("p","hd-description",median===null?"Not enough valid samples.":("Median validation error: "+median.toFixed(1)+"% of screen diagonal. Maximum: "+max.toFixed(1)+"%. Acceptance requires median ≤12%, maximum ≤22%, and four valid validation points.")));
+  body.append(el("p","hd-note",passed?"Experimental gaze coordinates will be saved in normalized screen space. This does not establish clinical-grade accuracy.":"No gaze coordinates will be exported from this attempt. You can retry or continue with iris signal and touch data."));
+  body.append(button("Continue to gallery",startGame),button("Retry calibration",runCalibration,true),button("Touch only",()=>{stopEyes();startGame();},true));
+ }
+}
+
 function eyeCheck(){
  clearInterval(eyeCheckTimer);
  if(!eye){startGame();return;}
@@ -66,8 +145,8 @@ function eyeCheck(){
  const preview=eye.video;preview.className="hd-check-video";frame.append(preview);
  const oval=el("div","hd-check-oval");frame.append(oval);
  const status=el("div","hd-eye-status","Checking face and iris landmarks…");
- const next=button("Continue to gallery",()=>{clearInterval(eyeCheckTimer);startGame();});next.disabled=true;
- const retry=button("Continue without eye data",()=>{clearInterval(checkTimer);stopEyes();startGame();},true);
+ const next=button("Calibrate gaze (9 points)",()=>{clearInterval(eyeCheckTimer);runCalibration();});next.disabled=true;
+ const retry=button("Continue without eye data",()=>{clearInterval(eyeCheckTimer);stopEyes();startGame();},true);
  body.append(kicker,title,desc,frame,status,next,retry);
  let valid=0,attempts=0;
  eyeCheckTimer=setInterval(()=>{
@@ -111,17 +190,17 @@ function collectEyes(){
  const now=performance.now();
  try{
   const lm=eye.model.detectForVideo(eye.video,now).faceLandmarks?.[0];
-  let x=null,head=null;
+  let x=null,y=null,head=null;
   if(lm&&lm.length>=478){
    const iris=(p,a,b)=>{
     const A=lm[a],B=lm[b],P=lm[p],dx=B.x-A.x,dy=B.y-A.y,d=dx*dx+dy*dy;
-    return d>.0002?((P.x-(A.x+B.x)/2)*dx+(P.y-(A.y+B.y)/2)*dy)/d:null;
+    return d>.0002?{x:((P.x-(A.x+B.x)/2)*dx+(P.y-(A.y+B.y)/2)*dy)/d,y:((P.y-(A.y+B.y)/2)*dx-(P.x-(A.x+B.x)/2)*dy)/d}:null;
    };
    const a=iris(468,33,133),b=iris(473,362,263);
-   if(a!==null&&b!==null&&Number.isFinite(a+b)){x=Math.round((a+b)*5000)/10000;eye.lastDetected=now;}
+   if(a!==null&&b!==null&&Number.isFinite(a+b)){x=Math.round((a.x+b.x)*5000)/10000;y=Math.round((a.y+b.y)*5000)/10000;eye.lastDetected=now;}
    head=Math.round((lm[33].x+lm[263].x)*5000)/10000;
   }
-  if(eye.start)eye.samples.push({t:Math.round(now-eye.start),x,head});
+  eye.latest=x===null?null:{x,y,t:now};if(eye.start)eye.samples.push({t:Math.round(now-eye.start),x,y,head});
  }catch(_){}
 }
 function beginEyeRound(){if(eye){eye.samples=[];eye.start=performance.now();}}
@@ -139,15 +218,16 @@ function endEyeRound(record){
  longestValidSampleGapMs:gaps.length?Math.max(...gaps):null,
   horizontalSignalRange:xs.length?Math.max(...xs)-Math.min(...xs):null,
   headMovementRange:hs.length?Math.max(...hs)-Math.min(...hs):null,
-  samples:data.map(p=>({t:p.t,x:p.x})),
-  note:"Eye-relative iris feature only; no calibrated artwork location, fixation or saccade measurement."
+  samples:data.map(p=>({t:p.t,x:p.x,y:p.y,gaze:eye.calibration?.passed&&p.x!==null&&p.y!==null?predictGaze(eye.calibration,[p.x,p.y]):null})),
+  calibration:eye.calibration?{passed:eye.calibration.passed,validationMedianErrorPct:eye.calibration.validationMedianErrorPct,validationMaxErrorPct:eye.calibration.validationMaxErrorPct}:null,
+  note:"Exploratory camera gaze estimate only when independently validated; not a clinical or reference-grade measurement."
  };
 }
 
 const rand=(seed)=>()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
 const el=(tag,cls,txt)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(txt!==undefined)n.textContent=txt;return n;};
 function stopClock(){if(raf)cancelAnimationFrame(raf);raf=0;}
-function shutdown(){galleryToken++;clearInterval(eyeCheckTimer);stopClock();stopEyes();root.hidden=true;document.body.classList.remove("hd-lock");session=null;openButton.focus();}
+function shutdown(){clearInterval(calibrationTimer);galleryToken++;clearInterval(eyeCheckTimer);stopClock();stopEyes();root.hidden=true;document.body.classList.remove("hd-lock");session=null;openButton.focus();}
 function button(text,fn,secondary=false){const b=el("button",secondary?"hd-button hd-secondary":"hd-button",text);b.type="button";b.addEventListener("click",fn);return b;}
 function showIntro(){
  body.replaceChildren();
@@ -269,7 +349,7 @@ function finishRound(found,skipped){
  if(scene.real)subtitle.textContent+=(found?" ":" ")+" "+scene.art.artist+" · "+scene.art.title;body.append(kicker,title,subtitle,reveal,button(session.round===3?"See my results":"Next artwork",()=>{session.round++;nextRound();}));
 }
 function showResults(){
- if(!session)return;clearInterval(eyeCheckTimer);stopEyes();body.replaceChildren();
+ if(!session)return;clearInterval(eyeCheckTimer);const calibrationSummary=eye?.calibration?{passed:eye.calibration.passed,medianErrorPct:eye.calibration.validationMedianErrorPct}:null;stopEyes();body.replaceChildren();
  const rows=session.results,success=rows.filter(r=>r.correct),mean=success.length?success.reduce((a,r)=>a+r.searchTimeMs,0)/success.length/1000:null;
  const kicker=el("div","hd-kicker","YOUR VISUAL SEARCH PROFILE");
  const title=el("h2","hd-title","The gallery, through your eyes.");
@@ -277,15 +357,16 @@ function showResults(){
  const stats=el("div","hd-stats");
  [["Found",success.length+" / 4"],["Average find time",mean===null?"—":mean.toFixed(1)+"s"],["Missed taps",rows.reduce((a,r)=>a+r.misses,0)]].forEach(([label,value])=>{const card=el("div","hd-stat");card.append(el("strong","",value),el("span","",label));stats.append(card);});
  const detail=el("div","hd-results-list");
- rows.forEach(r=>{const line=el("div","hd-result-line");line.append(el("span","",String(r.round).padStart(2,"0")+" · "+r.artwork?r.artwork.title:session.order[r.round-1].label),el("strong","",r.correct?(r.searchTimeMs/1000).toFixed(1)+"s":"Skipped"));detail.append(line);});
+ rows.forEach(r=>{const line=el("div","hd-result-line");line.append(el("span","",String(r.round).padStart(2,"0")+" · "+(r.artwork?r.artwork.title:session.order[r.round-1].label)),el("strong","",r.correct?(r.searchTimeMs/1000).toFixed(1)+"s":"Skipped"));detail.append(line);});
  const explain=el("p","hd-note","Measured: touch-based target localization, response time and missed taps. Not measured: precise eye fixation, saccades, or Alzheimer's/Parkinson's risk. Repeated play introduces learning effects.");
  const actions=el("div","hd-result-actions");
  actions.append(button("Play another gallery",startGame),button("Export session JSON",exportData,true));
  const good=rows.filter(r=>r.eyeTracking?.status==="exploratory");
  const avgCoverage=good.length?Math.round(good.reduce((sum,r)=>sum+r.eyeTracking.coveragePercent,0)/good.length):null;
  const eyeInfo=el("div","hd-eye-report");
+ if(calibrationSummary)eyeInfo.append(el("p","",calibrationSummary.passed?"Independent validation passed · median "+calibrationSummary.medianErrorPct+"% of viewport diagonal.":"Independent validation failed · gaze coordinates excluded."));
  eyeInfo.append(el("strong","","Eye signal quality"),el("p","",good.length?good.length+" / 4 rounds recorded · "+avgCoverage+"% mean valid sample coverage.":"Eye data unavailable or below the minimum sample count."));
- const caveat=el("p","hd-note","Uncalibrated horizontal iris signal only. Coverage measures detected samples, not spatial accuracy or diagnostic reliability.");
+ const caveat=el("p","hd-note","Camera gaze estimates are experimental, and independent screen validation does not make them clinical or reference-grade measurements.");
  eyeInfo.append(caveat);
  const sources=el("div","hd-art-credits");
  sources.append(el("strong","","Artworks & credits"));
@@ -294,7 +375,7 @@ function showResults(){
 }
 function exportData(){
  if(!session)return;
- const payload={experiment:"The Hidden Detail",version:"1.3-live-eye-quality",sessionId:session.id,startedAt:new Date(session.started).toISOString(),mode:"touch-visual-search",results:session.results,disclaimer:"Non-clinical visual-search game. Not a validated diagnostic measure. Optional raw iris feature only; not calibrated gaze."};
+ const payload={experiment:"The Hidden Detail",version:"2.0-calibrated-gaze",sessionId:session.id,startedAt:new Date(session.started).toISOString(),mode:"touch-visual-search",results:session.results,disclaimer:"Non-clinical visual-search game. Not a validated diagnostic measure. Screen-position estimates are exported only after independent validation; no diagnostic interpretation."};
  const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
  const url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="irispectra-hidden-detail-"+session.id+".json";document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
