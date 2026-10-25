@@ -24,6 +24,8 @@ const motifs={
 const palette=["#171717","#343434","#5b5b5b","#7c7c7c","#9d9d9d","#b6b6b6","#484848","#d1d1d1"];
 let session=null,raf=0;
 let eye=null;
+let eyeCheckTimer=0;
+let galleryToken=0;
 const realArtworks=[
  {title:"The Great Wave off Kanagawa",artist:"Katsushika Hokusai",file:"The_Great_Wave_off_Kanagawa.jpg",source:"https://commons.wikimedia.org/wiki/File:The_Great_Wave_off_Kanagawa.jpg"},
  {title:"Girl with a Pearl Earring",artist:"Johannes Vermeer",file:"Girl_with_a_Pearl_Earring.jpg",source:"https://commons.wikimedia.org/wiki/File:Girl_with_a_Pearl_Earring.jpg"},
@@ -54,6 +56,7 @@ function buildRealScene(round,loaded){
  return {svg,target:{x,y,r:size*.48},count:0,seed:session.seed,real:true,art,patch,canvas,size};
 }
 function eyeCheck(){
+ clearInterval(eyeCheckTimer);
  if(!eye){startGame();return;}
  body.replaceChildren();
  const kicker=el("div","hd-kicker","CAMERA / SIGNAL CHECK");
@@ -63,11 +66,11 @@ function eyeCheck(){
  const preview=eye.video;preview.className="hd-check-video";frame.append(preview);
  const oval=el("div","hd-check-oval");frame.append(oval);
  const status=el("div","hd-eye-status","Checking face and iris landmarks…");
- const next=button("Continue to gallery",()=>{clearInterval(checkTimer);startGame();});next.disabled=true;
+ const next=button("Continue to gallery",()=>{clearInterval(eyeCheckTimer);startGame();});next.disabled=true;
  const retry=button("Continue without eye data",()=>{clearInterval(checkTimer);stopEyes();startGame();},true);
  body.append(kicker,title,desc,frame,status,next,retry);
  let valid=0,attempts=0;
- const checkTimer=setInterval(()=>{
+ eyeCheckTimer=setInterval(()=>{
   if(!eye){clearInterval(checkTimer);return;}
   attempts++;
   const good=eye.lastDetected&&performance.now()-eye.lastDetected<750;
@@ -126,11 +129,14 @@ function endEyeRound(record){
  if(!eye){record.eyeTracking={status:"off"};return;}
  const data=eye.samples;eye.samples=[];eye.start=0;
  const valid=data.filter(p=>p.x!==null);
+ const gaps=[];for(let i=1;i<valid.length;i++)gaps.push(valid[i].t-valid[i-1].t);
  const xs=valid.map(p=>p.x),hs=valid.map(p=>p.head).filter(Number.isFinite);
  record.eyeTracking={
   status:valid.length>=10?"exploratory":"insufficient",
   sampleCount:data.length,validCount:valid.length,
   coveragePercent:data.length?Math.round(100*valid.length/data.length):0,
+ approximateSampleRateHz:data.length>1?Math.round(1000*(data.length-1)/Math.max(1,data[data.length-1].t-data[0].t)*10)/10:null,
+ longestValidSampleGapMs:gaps.length?Math.max(...gaps):null,
   horizontalSignalRange:xs.length?Math.max(...xs)-Math.min(...xs):null,
   headMovementRange:hs.length?Math.max(...hs)-Math.min(...hs):null,
   samples:data.map(p=>({t:p.t,x:p.x})),
@@ -141,7 +147,7 @@ function endEyeRound(record){
 const rand=(seed)=>()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
 const el=(tag,cls,txt)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(txt!==undefined)n.textContent=txt;return n;};
 function stopClock(){if(raf)cancelAnimationFrame(raf);raf=0;}
-function shutdown(){stopClock();stopEyes();root.hidden=true;document.body.classList.remove("hd-lock");session=null;openButton.focus();}
+function shutdown(){galleryToken++;clearInterval(eyeCheckTimer);stopClock();stopEyes();root.hidden=true;document.body.classList.remove("hd-lock");session=null;openButton.focus();}
 function button(text,fn,secondary=false){const b=el("button",secondary?"hd-button hd-secondary":"hd-button",text);b.type="button";b.addEventListener("click",fn);return b;}
 function showIntro(){
  body.replaceChildren();
@@ -157,7 +163,7 @@ function showIntro(){
  body.append(kicker,title,desc,sample,note,opt,caution,launch);
 }
 function startGame(){
- const seed=(crypto?.getRandomValues?crypto.getRandomValues(new Uint32Array(1))[0]:Date.now()>>>0);
+ const seed=(globalThis.crypto?.getRandomValues?crypto.getRandomValues(new Uint32Array(1))[0]:Date.now()>>>0);
  const random=rand(seed);
  const order=[...targets];for(let i=order.length-1;i>0;i--){const j=Math.floor(random()*(i+1));[order[i],order[j]]=[order[j],order[i]];}
  const artOrder=[...realArtworks];for(let i=artOrder.length-1;i>0;i--){const j=Math.floor(random()*(i+1));[artOrder[i],artOrder[j]]=[artOrder[j],artOrder[i]];}session={id:Date.now().toString(36),round:0,results:[],started:Date.now(),seed,order,artOrder};nextRound();
@@ -193,11 +199,12 @@ function buildArtwork(round,targetId){
 async function nextRound(){
  stopClock();if(!session)return;
  const round=session.round;
+ const token=++galleryToken;
  if(round>=4){showResults();return;}
  const item=session.order[round];
  body.replaceChildren(el("p","hd-note","Preparing your artwork…"));
  const loaded=await loadRealArtwork(round);
- if(!session||session.round!==round||root.hidden)return;
+ if(!session||session.round!==round||root.hidden||token!==galleryToken)return;
  const scene=loaded?buildRealScene(round,loaded):buildArtwork(round,item.id);
  const record={round:round+1,target:scene.real?"painting fragment":item.id,artwork:scene.real?{title:scene.art.title,artist:scene.art.artist,source:scene.art.source}:null,distractorCount:scene.real?null:scene.count-1,seed:scene.seed,correct:false,misses:0,searchTimeMs:null,attempts:[]};
  session.active={record,scene,start:0,paused:false};
@@ -212,12 +219,22 @@ async function nextRound(){
  art.innerHTML=scene.svg;
  const svg=art.querySelector("svg");
  const feedback=el("div","hd-feedback","Tap the artwork to select a detail.");
+ const signal=el("div","hd-live-signal",eye?"● Eye signal: checking":"Touch-only mode");
  const bottom=el("div","hd-round-actions");
  const skip=button("Skip artwork",()=>finishRound(false,true),true);
- bottom.append(skip);
+ bottom.append(skip);if(eye)bottom.append(signal);
  if(scene.real){const targetCard=el("div","hd-fragment");targetCard.append(el("span","","FIND THIS FRAGMENT"),scene.patch);body.append(head,title,help,targetCard,art,feedback,bottom);}else body.append(head,title,help,art,feedback,bottom);
  const start=performance.now();session.active.start=start;beginEyeRound();
- function clock(now){if(!session||session.active?.record!==record)return;time.textContent=((now-start)/1000).toFixed(1)+"s";raf=requestAnimationFrame(clock);}
+ function clock(now){
+  if(!session||session.active?.record!==record)return;
+  time.textContent=((now-start)/1000).toFixed(1)+"s";
+  if(eye){
+   const seen=eye.lastDetected&&now-eye.lastDetected<900;
+   signal.textContent=seen?"● Eye signal active":"○ Eye signal lost";
+   signal.classList.toggle("hd-signal-ok",!!seen);
+  }
+  raf=requestAnimationFrame(clock);
+ }
  raf=requestAnimationFrame(clock);
  svg.addEventListener("click",e=>{
   if(!session||session.active?.record!==record||record.correct)return;
@@ -252,7 +269,7 @@ function finishRound(found,skipped){
  if(scene.real)subtitle.textContent+=(found?" ":" ")+" "+scene.art.artist+" · "+scene.art.title;body.append(kicker,title,subtitle,reveal,button(session.round===3?"See my results":"Next artwork",()=>{session.round++;nextRound();}));
 }
 function showResults(){
- if(!session)return;stopEyes();body.replaceChildren();
+ if(!session)return;clearInterval(eyeCheckTimer);stopEyes();body.replaceChildren();
  const rows=session.results,success=rows.filter(r=>r.correct),mean=success.length?success.reduce((a,r)=>a+r.searchTimeMs,0)/success.length/1000:null;
  const kicker=el("div","hd-kicker","YOUR VISUAL SEARCH PROFILE");
  const title=el("h2","hd-title","The gallery, through your eyes.");
@@ -264,11 +281,20 @@ function showResults(){
  const explain=el("p","hd-note","Measured: touch-based target localization, response time and missed taps. Not measured: precise eye fixation, saccades, or Alzheimer's/Parkinson's risk. Repeated play introduces learning effects.");
  const actions=el("div","hd-result-actions");
  actions.append(button("Play another gallery",startGame),button("Export session JSON",exportData,true));
- const eyeInfo=el("p","hd-note","Eye tracking: "+rows.filter(r=>r.eyeTracking?.status==="exploratory").length+"/4 rounds with sufficient raw iris samples. Eye features and coverage are included in the export, not interpreted as artwork fixation positions.");body.append(kicker,title,note,stats,detail,eyeInfo,explain,actions);
+ const good=rows.filter(r=>r.eyeTracking?.status==="exploratory");
+ const avgCoverage=good.length?Math.round(good.reduce((sum,r)=>sum+r.eyeTracking.coveragePercent,0)/good.length):null;
+ const eyeInfo=el("div","hd-eye-report");
+ eyeInfo.append(el("strong","","Eye signal quality"),el("p","",good.length?good.length+" / 4 rounds recorded · "+avgCoverage+"% mean valid sample coverage.":"Eye data unavailable or below the minimum sample count."));
+ const caveat=el("p","hd-note","Uncalibrated horizontal iris signal only. Coverage measures detected samples, not spatial accuracy or diagnostic reliability.");
+ eyeInfo.append(caveat);
+ const sources=el("div","hd-art-credits");
+ sources.append(el("strong","","Artworks & credits"));
+ rows.forEach(r=>{if(!r.artwork)return;const a=document.createElement("a");a.href=r.artwork.source;a.target="_blank";a.rel="noopener noreferrer";a.textContent=r.artwork.artist+" · "+r.artwork.title;sources.append(a);});
+ body.append(kicker,title,note,stats,detail,eyeInfo,sources,explain,actions);
 }
 function exportData(){
  if(!session)return;
- const payload={experiment:"The Hidden Detail",version:"1.2-real-art-eye-check",sessionId:session.id,startedAt:new Date(session.started).toISOString(),mode:"touch-visual-search",results:session.results,disclaimer:"Non-clinical visual-search game. Not a validated diagnostic measure. Optional raw iris feature only; not calibrated gaze."};
+ const payload={experiment:"The Hidden Detail",version:"1.3-live-eye-quality",sessionId:session.id,startedAt:new Date(session.started).toISOString(),mode:"touch-visual-search",results:session.results,disclaimer:"Non-clinical visual-search game. Not a validated diagnostic measure. Optional raw iris feature only; not calibrated gaze."};
  const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
  const url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="irispectra-hidden-detail-"+session.id+".json";document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
