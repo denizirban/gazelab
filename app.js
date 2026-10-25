@@ -23,7 +23,7 @@ function controls(){
   setVisible(els.start,S.phase==="idle" || S.phase==="error");
   setVisible(els.calibrate,S.phase==="ready");
   setVisible(els.restart,S.phase==="results" || S.phase==="ready");
-  setVisible(els.export,S.phase==="results"||S.phase==="game");
+  setVisible(els.export,!!S.result&&(S.phase==="results"||S.phase==="ready"||S.phase==="game"));
   setVisible(els.play,S.phase==="results");
   if(els.choiceStart)setVisible(els.choiceStart,S.phase==="idle"||S.phase==="ready"||S.phase==="results"||S.phase==="error");
   if(els.choiceEnd)setVisible(els.choiceEnd,S.phase==="choice");
@@ -556,7 +556,16 @@ function revealChoice(row,i,more,total){
  const d=document.createElement("div");d.className="choiceResult";d.textContent="You chose "+row.chosenLabel+" ("+["","not sure","somewhat sure","very sure"][row.confidence]+"). Estimated viewing time: "+row.options[0]+" "+(row.dwellMs[0]/1000).toFixed(1)+"s · "+row.options[1]+" "+(row.dwellMs[1]/1000).toFixed(1)+"s. First seen: "+(row.firstRegion===null?"unclassified":row.options[row.firstRegion])+". Last seen: "+(row.lastRegion===null?"unclassified":row.options[row.lastRegion])+". This is not a measure of unconscious preference.";
  const next=document.createElement("button");next.className="primary";next.textContent=c.round===choiceSets.length*2-1?"See my results":c.round===choiceSets.length-1?"Start second look":"Next round";next.addEventListener("click",()=>{c.round++;if(c.round===choiceSets.length){showChoiceBreak();}else if(c.round<choiceSets.length*2)choiceRound();else finishChoice();});
  if(total<1800){h.textContent="Not enough gaze data";d.textContent="Only "+row.coverage+"% of the observation was classified. Your choice was saved, but we cannot compare attention reliably. Hold the phone steady and try looking distinctly left and right.";}
- els.choiceOverlay.append(h,d,next);
+ const chart=document.createElement("div");chart.style.cssText="width:min(100%,420px);display:grid;gap:9px;text-align:left";
+ row.options.forEach((label,k)=>{
+  const wrap=document.createElement("div");wrap.style.cssText="font-size:12px;color:#555";
+  const name=document.createElement("div");name.textContent=label+" · "+(row.dwellMs[k]/1000).toFixed(1)+"s";
+  const track=document.createElement("div");track.style.cssText="height:9px;border-radius:20px;background:#eee;overflow:hidden;margin-top:4px";
+  const fill=document.createElement("div");fill.style.cssText="height:100%;border-radius:20px;background:"+(k===0?"#585cf5":"#f48c80")+";width:"+Math.round(row.dwellMs[k]/6000*100)+"%";
+  track.append(fill);wrap.append(name,track);chart.append(wrap);
+ });
+ const coverage=document.createElement("div");coverage.className="choiceHint";coverage.textContent="Classified gaze coverage: "+row.coverage+"% · "+(row.coverage>=30?"Exploratory estimate":"Insufficient for comparison");
+ els.choiceOverlay.append(h,d,chart,coverage,next);
 }
 function showChoiceBreak(){
  const c=S.choice;if(!c)return;c.phase="break";els.choiceOverlay.innerHTML="";
