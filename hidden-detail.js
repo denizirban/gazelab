@@ -104,7 +104,7 @@ function stopEyes(){
  eye.video.srcObject=null;eye=null;
 }
 function collectEyes(){
- if(!eye||!eye.start||eye.video.readyState<2)return;
+ if(!eye||eye.video.readyState<2)return;
  const now=performance.now();
  try{
   const lm=eye.model.detectForVideo(eye.video,now).faceLandmarks?.[0];
@@ -118,7 +118,7 @@ function collectEyes(){
    if(a!==null&&b!==null&&Number.isFinite(a+b)){x=Math.round((a+b)*5000)/10000;eye.lastDetected=now;}
    head=Math.round((lm[33].x+lm[263].x)*5000)/10000;
   }
-  eye.samples.push({t:Math.round(now-eye.start),x,head});
+  if(eye.start)eye.samples.push({t:Math.round(now-eye.start),x,head});
  }catch(_){}
 }
 function beginEyeRound(){if(eye){eye.samples=[];eye.start=performance.now();}}
@@ -197,7 +197,7 @@ async function nextRound(){
  const item=session.order[round];
  body.replaceChildren(el("p","hd-note","Preparing your artwork…"));
  const loaded=await loadRealArtwork(round);
- if(!session||session.round!==round)return;
+ if(!session||session.round!==round||root.hidden)return;
  const scene=loaded?buildRealScene(round,loaded):buildArtwork(round,item.id);
  const record={round:round+1,target:scene.real?"painting fragment":item.id,artwork:scene.real?{title:scene.art.title,artist:scene.art.artist,source:scene.art.source}:null,distractorCount:scene.real?null:scene.count-1,seed:scene.seed,correct:false,misses:0,searchTimeMs:null,attempts:[]};
  session.active={record,scene,start:0,paused:false};
