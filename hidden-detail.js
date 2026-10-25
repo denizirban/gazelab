@@ -24,6 +24,61 @@ const motifs={
 const palette=["#171717","#343434","#5b5b5b","#7c7c7c","#9d9d9d","#b6b6b6","#484848","#d1d1d1"];
 let session=null,raf=0;
 let eye=null;
+const realArtworks=[
+ {title:"The Great Wave off Kanagawa",artist:"Katsushika Hokusai",file:"The_Great_Wave_off_Kanagawa.jpg",source:"https://commons.wikimedia.org/wiki/File:The_Great_Wave_off_Kanagawa.jpg"},
+ {title:"Girl with a Pearl Earring",artist:"Johannes Vermeer",file:"Girl_with_a_Pearl_Earring.jpg",source:"https://commons.wikimedia.org/wiki/File:Girl_with_a_Pearl_Earring.jpg"},
+ {title:"The Starry Night",artist:"Vincent van Gogh",file:"Starry_Night.webp",source:"https://commons.wikimedia.org/wiki/File:Starry_Night.webp"}
+];
+function artworkUrl(art){return "https://commons.wikimedia.org/wiki/Special:FilePath/"+art.file+"?width=1000";}
+async function loadRealArtwork(round){
+ const art=session.artOrder[round%session.artOrder.length],url=artworkUrl(art);
+ return await new Promise(resolve=>{
+  const img=new Image();let done=false;
+  const finish=ok=>{if(done)return;done=true;clearTimeout(timeout);resolve(ok?{art,img,url}:null);};
+  const timeout=setTimeout(()=>finish(false),9000);
+  img.onload=()=>finish(true);img.onerror=()=>finish(false);img.src=url;
+ });
+}
+function buildRealScene(round,loaded){
+ const {art,img,url}=loaded,random=rand((session.seed+round*2027)>>>0);
+ const width=700,height=480;
+ const ratio=Math.max(width/img.naturalWidth,height/img.naturalHeight);
+ const dw=img.naturalWidth*ratio,dh=img.naturalHeight*ratio;
+ const ox=(width-dw)/2,oy=(height-dh)/2;
+ const canvas=document.createElement("canvas");canvas.width=width;canvas.height=height;
+ const ctx=canvas.getContext("2d");ctx.drawImage(img,ox,oy,dw,dh);
+ const size=[85,68,55,43][round],x=60+random()*(width-120),y=60+random()*(height-120);
+ const patch=document.createElement("canvas");patch.width=120;patch.height=120;
+ patch.getContext("2d").drawImage(canvas,x-size/2,y-size/2,size,size,0,0,120,120);
+ const svg='<svg class="hd-artwork" viewBox="0 0 700 480" role="img" aria-label="Public domain painting with a hidden detail" preserveAspectRatio="xMidYMid meet"><image href="'+url.replaceAll("&","&amp;")+'" x="'+ox+'" y="'+oy+'" width="'+dw+'" height="'+dh+'"/></svg>';
+ return {svg,target:{x,y,r:size*.48},count:0,seed:session.seed,real:true,art,patch,canvas,size};
+}
+function eyeCheck(){
+ if(!eye){startGame();return;}
+ body.replaceChildren();
+ const kicker=el("div","hd-kicker","CAMERA / SIGNAL CHECK");
+ const title=el("h2","hd-title","First, find your eyes.");
+ const desc=el("p","hd-description","Position your face inside the frame. The indicator shows whether both irises are detected. This checks tracking availability, not gaze accuracy.");
+ const frame=el("div","hd-camera-check");
+ const preview=eye.video;preview.className="hd-check-video";frame.append(preview);
+ const oval=el("div","hd-check-oval");frame.append(oval);
+ const status=el("div","hd-eye-status","Checking face and iris landmarks…");
+ const next=button("Continue to gallery",()=>{clearInterval(checkTimer);startGame();});next.disabled=true;
+ const retry=button("Continue without eye data",()=>{clearInterval(checkTimer);stopEyes();startGame();},true);
+ body.append(kicker,title,desc,frame,status,next,retry);
+ let valid=0,attempts=0;
+ const checkTimer=setInterval(()=>{
+  if(!eye){clearInterval(checkTimer);return;}
+  attempts++;
+  const good=eye.lastDetected&&performance.now()-eye.lastDetected<750;
+  valid=good?valid+1:0;
+  oval.classList.toggle("good",!!good);
+  status.textContent=good?"Both irises detected · "+Math.min(100,Math.round(valid/6*100))+"% signal check":"Face or iris landmarks not detected. Improve lighting and face the camera.";
+  if(valid>=6){next.disabled=false;status.textContent="Eye signal detected. Ready for the gallery.";clearInterval(checkTimer);}
+  if(attempts>90){clearInterval(checkTimer);status.textContent="Signal check timed out. You can continue without eye tracking.";}
+ },180);
+}
+
 async function enableEyes(){
  if(eye)return true;
  let stream,model;
@@ -60,7 +115,7 @@ function collectEyes(){
     return d>.0002?((P.x-(A.x+B.x)/2)*dx+(P.y-(A.y+B.y)/2)*dy)/d:null;
    };
    const a=iris(468,33,133),b=iris(473,362,263);
-   if(a!==null&&b!==null&&Number.isFinite(a+b))x=Math.round((a+b)*5000)/10000;
+   if(a!==null&&b!==null&&Number.isFinite(a+b)){x=Math.round((a+b)*5000)/10000;eye.lastDetected=now;}
    head=Math.round((lm[33].x+lm[263].x)*5000)/10000;
   }
   eye.samples.push({t:Math.round(now-eye.start),x,head});
@@ -95,17 +150,17 @@ function showIntro(){
  const desc=el("p","hd-description","A visual search experiment disguised as an art mystery. Discover how efficiently you find a detail inside increasingly complex scenes.");
  const sample=el("div","hd-intro-art");
  sample.innerHTML='<svg viewBox="0 0 560 140" aria-hidden="true"><rect width="560" height="140" rx="16" fill="#171717"/><circle cx="96" cy="70" r="45" fill="#ededed"/><path d="M210 30 Q260 90 210 120 Q160 90 210 30" fill="#999999"/><path d="M320 30 Q400 65 320 110 Q270 65 320 30" fill="#555555"/><circle cx="466" cy="70" r="43" fill="#343434"/><path d="M466 43 A27 27 0 1 0 466 97 A20 20 0 1 1 466 43Z" fill="#ffffff"/></svg>';
- const note=el("p","hd-note","Four newly generated artworks each session · Randomized targets · Tap where you find it. Camera is optional. Your results stay on this device unless you export them.");
+ const note=el("p","hd-note","Discover hidden fragments inside real, public-domain masterpieces. Artwork order and target fragments change between sessions. Camera is optional.");
  const opt=el("label","hd-eye-toggle");const check=document.createElement("input");check.type="checkbox";opt.append(check,document.createTextNode(" Include experimental eye movement data"));
  const caution=el("p","hd-note","Optional camera-based iris signal, processed on-device. No camera frames are saved. This is not precise gaze localization.");
- const launch=button("Enter the gallery",async()=>{launch.disabled=true;if(check.checked&&!await enableEyes()){caution.textContent="Camera unavailable. Uncheck eye tracking to continue.";launch.disabled=false;return;}startGame();});
+ const launch=button("Enter the gallery",async()=>{launch.disabled=true;if(check.checked&&!await enableEyes()){caution.textContent="Camera unavailable. Uncheck eye tracking to continue.";launch.disabled=false;return;}if(check.checked)eyeCheck();else startGame();});
  body.append(kicker,title,desc,sample,note,opt,caution,launch);
 }
 function startGame(){
  const seed=(crypto?.getRandomValues?crypto.getRandomValues(new Uint32Array(1))[0]:Date.now()>>>0);
  const random=rand(seed);
  const order=[...targets];for(let i=order.length-1;i>0;i--){const j=Math.floor(random()*(i+1));[order[i],order[j]]=[order[j],order[i]];}
- session={id:Date.now().toString(36),round:0,results:[],started:Date.now(),seed,order};nextRound();
+ const artOrder=[...realArtworks];for(let i=artOrder.length-1;i>0;i--){const j=Math.floor(random()*(i+1));[artOrder[i],artOrder[j]]=[artOrder[j],artOrder[i]];}session={id:Date.now().toString(36),round:0,results:[],started:Date.now(),seed,order,artOrder};nextRound();
 }
 function buildArtwork(round,targetId){
  const seed=((session.seed+round*8171+Math.floor(Math.random()*0xffffffff))>>>0);
@@ -135,20 +190,24 @@ function buildArtwork(round,targetId){
  svg+='<rect width="700" height="480" fill="url(#hdgrain)" pointer-events="none"/><rect x="10" y="10" width="680" height="460" rx="7" fill="none" stroke="#aaaaaa" opacity=".6" stroke-width="2"/></svg>';
  return {svg,target,seed,count};
 }
-function nextRound(){
+async function nextRound(){
  stopClock();if(!session)return;
  const round=session.round;
  if(round>=4){showResults();return;}
- const item=session.order[round],scene=buildArtwork(round,item.id);
- const record={round:round+1,target:item.id,distractorCount:scene.count-1,seed:scene.seed,correct:false,misses:0,searchTimeMs:null,attempts:[]};
+ const item=session.order[round];
+ body.replaceChildren(el("p","hd-note","Preparing your artwork…"));
+ const loaded=await loadRealArtwork(round);
+ if(!session||session.round!==round)return;
+ const scene=loaded?buildRealScene(round,loaded):buildArtwork(round,item.id);
+ const record={round:round+1,target:scene.real?"painting fragment":item.id,artwork:scene.real?{title:scene.art.title,artist:scene.art.artist,source:scene.art.source}:null,distractorCount:scene.real?null:scene.count-1,seed:scene.seed,correct:false,misses:0,searchTimeMs:null,attempts:[]};
  session.active={record,scene,start:0,paused:false};
  body.replaceChildren();
  const head=el("div","hd-round-head");
  const label=el("div","hd-kicker","GALLERY "+String(round+1).padStart(2,"0")+" / 04");
  const time=el("div","hd-timer","0.0s");
  head.append(label,time);
- const title=el("h2","hd-round-title","Find "+item.label+".");
- const help=el("p","hd-help","Explore the artwork. Tap the detail when you find it.");
+ const title=el("h2","hd-round-title",scene.real?"Find this detail.":"Find "+item.label+".");
+ const help=el("p","hd-help",scene.real?scene.art.artist+" · "+scene.art.title:"Explore the artwork. Tap the detail when you find it.");
  const art=el("div","hd-art-shell");
  art.innerHTML=scene.svg;
  const svg=art.querySelector("svg");
@@ -156,7 +215,7 @@ function nextRound(){
  const bottom=el("div","hd-round-actions");
  const skip=button("Skip artwork",()=>finishRound(false,true),true);
  bottom.append(skip);
- body.append(head,title,help,art,feedback,bottom);
+ if(scene.real){const targetCard=el("div","hd-fragment");targetCard.append(el("span","","FIND THIS FRAGMENT"),scene.patch);body.append(head,title,help,targetCard,art,feedback,bottom);}else body.append(head,title,help,art,feedback,bottom);
  const start=performance.now();session.active.start=start;beginEyeRound();
  function clock(now){if(!session||session.active?.record!==record)return;time.textContent=((now-start)/1000).toFixed(1)+"s";raf=requestAnimationFrame(clock);}
  raf=requestAnimationFrame(clock);
@@ -167,7 +226,7 @@ function nextRound(){
   const local=point.matrixTransform(matrix.inverse());
   const x=local.x,y=local.y;
   const distance=Math.hypot(x-scene.target.x,y-scene.target.y);
-  const correct=distance<=Math.max(scene.target.r,17);
+  const correct=scene.real?(Math.abs(x-scene.target.x)<=scene.size*.55&&Math.abs(y-scene.target.y)<=scene.size*.55):distance<=Math.max(scene.target.r,17);
   record.attempts.push({x:Math.round(x),y:Math.round(y),elapsedMs:Math.round(performance.now()-start),correct});
   if(correct){record.correct=true;record.searchTimeMs=Math.round(performance.now()-start);finishRound(true,false);}
   else{record.misses++;feedback.textContent="Not quite. Keep looking — "+record.misses+" missed "+(record.misses===1?"tap":"taps")+".";
@@ -189,8 +248,8 @@ function finishRound(found,skipped){
  reveal.innerHTML=scene.svg;
  const svg=reveal.querySelector("svg");
  const ns="http://www.w3.org/2000/svg";
- const ring=document.createElementNS(ns,"circle");ring.setAttribute("cx",scene.target.x);ring.setAttribute("cy",scene.target.y);ring.setAttribute("r","29");ring.setAttribute("fill","none");ring.setAttribute("stroke","#f5d783");ring.setAttribute("stroke-width","5");ring.setAttribute("class","hd-target-ring");svg.append(ring);
- body.append(kicker,title,subtitle,reveal,button(session.round===3?"See my results":"Next artwork",()=>{session.round++;nextRound();}));
+ const ring=document.createElementNS(ns,"circle");ring.setAttribute("cx",scene.target.x);ring.setAttribute("cy",scene.target.y);ring.setAttribute("r",scene.real?scene.size*.7:29);ring.setAttribute("fill","none");ring.setAttribute("stroke","#f5d783");ring.setAttribute("stroke-width","5");ring.setAttribute("class","hd-target-ring");svg.append(ring);
+ if(scene.real)subtitle.textContent+=(found?" ":" ")+" "+scene.art.artist+" · "+scene.art.title;body.append(kicker,title,subtitle,reveal,button(session.round===3?"See my results":"Next artwork",()=>{session.round++;nextRound();}));
 }
 function showResults(){
  if(!session)return;stopEyes();body.replaceChildren();
@@ -201,7 +260,7 @@ function showResults(){
  const stats=el("div","hd-stats");
  [["Found",success.length+" / 4"],["Average find time",mean===null?"—":mean.toFixed(1)+"s"],["Missed taps",rows.reduce((a,r)=>a+r.misses,0)]].forEach(([label,value])=>{const card=el("div","hd-stat");card.append(el("strong","",value),el("span","",label));stats.append(card);});
  const detail=el("div","hd-results-list");
- rows.forEach(r=>{const line=el("div","hd-result-line");line.append(el("span","",String(r.round).padStart(2,"0")+" · "+session.order[r.round-1].label),el("strong","",r.correct?(r.searchTimeMs/1000).toFixed(1)+"s":"Skipped"));detail.append(line);});
+ rows.forEach(r=>{const line=el("div","hd-result-line");line.append(el("span","",String(r.round).padStart(2,"0")+" · "+r.artwork?r.artwork.title:session.order[r.round-1].label),el("strong","",r.correct?(r.searchTimeMs/1000).toFixed(1)+"s":"Skipped"));detail.append(line);});
  const explain=el("p","hd-note","Measured: touch-based target localization, response time and missed taps. Not measured: precise eye fixation, saccades, or Alzheimer's/Parkinson's risk. Repeated play introduces learning effects.");
  const actions=el("div","hd-result-actions");
  actions.append(button("Play another gallery",startGame),button("Export session JSON",exportData,true));
@@ -209,7 +268,7 @@ function showResults(){
 }
 function exportData(){
  if(!session)return;
- const payload={experiment:"The Hidden Detail",version:"1.1-optional-eye",sessionId:session.id,startedAt:new Date(session.started).toISOString(),mode:"touch-visual-search",results:session.results,disclaimer:"Non-clinical visual-search game. Not a validated diagnostic measure. Optional raw iris feature only; not calibrated gaze."};
+ const payload={experiment:"The Hidden Detail",version:"1.2-real-art-eye-check",sessionId:session.id,startedAt:new Date(session.started).toISOString(),mode:"touch-visual-search",results:session.results,disclaimer:"Non-clinical visual-search game. Not a validated diagnostic measure. Optional raw iris feature only; not calibrated gaze."};
  const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
  const url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="irispectra-hidden-detail-"+session.id+".json";document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
