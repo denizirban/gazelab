@@ -21,7 +21,7 @@ const motifs={
  spiral:'<path d="M0 0 C-15 -12 -17 14 0 14 C23 14 22 -19 0 -19" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>',
  star:'<path d="M0 -17 L5 -5 L17 -5 L8 3 L11 16 L0 9 L-11 16 L-8 3 L-17 -5 L-5 -5Z" fill="currentColor"/>'
 };
-const palette=["#d7b46c","#a66d5d","#7d9c88","#506a80","#c28d8a","#e6c990","#566d62","#a8b3ac"];
+const palette=["#171717","#343434","#5b5b5b","#7c7c7c","#9d9d9d","#b6b6b6","#484848","#d1d1d1"];
 let session=null,raf=0;
 let eye=null;
 async function enableEyes(){
@@ -94,22 +94,27 @@ function showIntro(){
  const title=el("h2","hd-title","The Hidden Detail");
  const desc=el("p","hd-description","A visual search experiment disguised as an art mystery. Discover how efficiently you find a detail inside increasingly complex scenes.");
  const sample=el("div","hd-intro-art");
- sample.innerHTML='<svg viewBox="0 0 560 140" aria-hidden="true"><rect width="560" height="140" rx="16" fill="#182b37"/><circle cx="96" cy="70" r="45" fill="#c0a06c"/><path d="M210 30 Q260 90 210 120 Q160 90 210 30" fill="#8cae9a"/><path d="M320 30 Q400 65 320 110 Q270 65 320 30" fill="#b7746d"/><circle cx="466" cy="70" r="43" fill="#536b76"/><path d="M466 43 A27 27 0 1 0 466 97 A20 20 0 1 1 466 43Z" fill="#f2d28c"/></svg>';
- const note=el("p","hd-note","Four artworks · Find a different target each time · Tap where you find it. Camera is optional. Your results stay on this device unless you export them.");
+ sample.innerHTML='<svg viewBox="0 0 560 140" aria-hidden="true"><rect width="560" height="140" rx="16" fill="#171717"/><circle cx="96" cy="70" r="45" fill="#ededed"/><path d="M210 30 Q260 90 210 120 Q160 90 210 30" fill="#999999"/><path d="M320 30 Q400 65 320 110 Q270 65 320 30" fill="#555555"/><circle cx="466" cy="70" r="43" fill="#343434"/><path d="M466 43 A27 27 0 1 0 466 97 A20 20 0 1 1 466 43Z" fill="#ffffff"/></svg>';
+ const note=el("p","hd-note","Four newly generated artworks each session · Randomized targets · Tap where you find it. Camera is optional. Your results stay on this device unless you export them.");
  const opt=el("label","hd-eye-toggle");const check=document.createElement("input");check.type="checkbox";opt.append(check,document.createTextNode(" Include experimental eye movement data"));
  const caution=el("p","hd-note","Optional camera-based iris signal, processed on-device. No camera frames are saved. This is not precise gaze localization.");
  const launch=button("Enter the gallery",async()=>{launch.disabled=true;if(check.checked&&!await enableEyes()){caution.textContent="Camera unavailable. Uncheck eye tracking to continue.";launch.disabled=false;return;}startGame();});
  body.append(kicker,title,desc,sample,note,opt,caution,launch);
 }
-function startGame(){session={id:Date.now().toString(36),round:0,results:[],started:Date.now()};nextRound();}
-function buildArtwork(round,targetId){
- const seed=(Date.now()>>>0)+round*8171;
+function startGame(){
+ const seed=(crypto?.getRandomValues?crypto.getRandomValues(new Uint32Array(1))[0]:Date.now()>>>0);
  const random=rand(seed);
- const count=[38,62,88,118][round];
+ const order=[...targets];for(let i=order.length-1;i>0;i--){const j=Math.floor(random()*(i+1));[order[i],order[j]]=[order[j],order[i]];}
+ session={id:Date.now().toString(36),round:0,results:[],started:Date.now(),seed,order};nextRound();
+}
+function buildArtwork(round,targetId){
+ const seed=((session.seed+round*8171+Math.floor(Math.random()*0xffffffff))>>>0);
+ const random=rand(seed);
+ const count=[38,62,88,118][round]+Math.floor(random()*9);
  const targetIndex=Math.floor(random()*count);
  const kinds=Object.keys(motifs).filter(k=>k!==targetId);
  const target={x:0,y:0,r:0};
- let svg='<svg class="hd-artwork" viewBox="0 0 700 480" role="img" aria-label="Decorative artwork containing the hidden target" preserveAspectRatio="xMidYMid meet"><defs><radialGradient id="hdsky"><stop stop-color="#30465a"/><stop offset="1" stop-color="#152733"/></radialGradient><pattern id="hdgrain" width="39" height="37" patternUnits="userSpaceOnUse"><circle cx="5" cy="8" r="1" fill="#fff" opacity=".12"/><circle cx="26" cy="28" r=".7" fill="#fff" opacity=".12"/></pattern></defs><rect width="700" height="480" fill="url(#hdsky)"/><circle cx="350" cy="220" r="170" fill="none" stroke="#cba66f" stroke-width="1.5" opacity=".35"/><circle cx="350" cy="220" r="210" fill="none" stroke="#cba66f" stroke-width="1" opacity=".2"/>';
+ let svg='<svg class="hd-artwork" viewBox="0 0 700 480" role="img" aria-label="Decorative artwork containing the hidden target" preserveAspectRatio="xMidYMid meet"><defs><radialGradient id="hdsky"><stop stop-color="#3c3c3c"/><stop offset="1" stop-color="#111111"/></radialGradient><pattern id="hdgrain" width="39" height="37" patternUnits="userSpaceOnUse"><circle cx="5" cy="8" r="1" fill="#fff" opacity=".12"/><circle cx="26" cy="28" r=".7" fill="#fff" opacity=".12"/></pattern></defs><rect width="700" height="480" fill="url(#hdsky)"/><circle cx="350" cy="220" r="170" fill="none" stroke="#9d9d9d" stroke-width="1.5" opacity=".35"/><circle cx="350" cy="220" r="210" fill="none" stroke="#cba66f" stroke-width="1" opacity=".2"/>';
  for(let i=0;i<18;i++){
  const x=Math.floor(random()*700),y=Math.floor(random()*480),radius=10+random()*65;
  svg+='<circle cx="'+x+'" cy="'+y+'" r="'+radius.toFixed(1)+'" fill="none" stroke="'+palette[Math.floor(random()*palette.length)]+'" opacity=".14" stroke-width="2"/>';
@@ -122,19 +127,19 @@ function buildArtwork(round,targetId){
  const isTarget=i===targetIndex;
  const kind=isTarget?targetId:kinds[Math.floor(random()*kinds.length)];
  const scale=(isTarget?.78:.65+random()*.55)*(round>=2?.85:1);
- const color=isTarget?"#e9c47d":palette[Math.floor(random()*palette.length)];
+ const color=isTarget?"#dcdcdc":palette[Math.floor(random()*palette.length)];
  const rot=Math.floor(random()*360);
  svg+='<g transform="translate('+x.toFixed(1)+' '+y.toFixed(1)+') rotate('+rot+') scale('+scale.toFixed(2)+')" style="color:'+color+'">'+motifs[kind]+'</g>';
  if(isTarget){target.x=x;target.y=y;target.r=22*scale+9;}
  }
- svg+='<rect width="700" height="480" fill="url(#hdgrain)" pointer-events="none"/><rect x="10" y="10" width="680" height="460" rx="7" fill="none" stroke="#d8b77b" opacity=".6" stroke-width="2"/></svg>';
+ svg+='<rect width="700" height="480" fill="url(#hdgrain)" pointer-events="none"/><rect x="10" y="10" width="680" height="460" rx="7" fill="none" stroke="#aaaaaa" opacity=".6" stroke-width="2"/></svg>';
  return {svg,target,seed,count};
 }
 function nextRound(){
  stopClock();if(!session)return;
  const round=session.round;
  if(round>=4){showResults();return;}
- const item=targets[round],scene=buildArtwork(round,item.id);
+ const item=session.order[round],scene=buildArtwork(round,item.id);
  const record={round:round+1,target:item.id,distractorCount:scene.count-1,seed:scene.seed,correct:false,misses:0,searchTimeMs:null,attempts:[]};
  session.active={record,scene,start:0,paused:false};
  body.replaceChildren();
@@ -196,7 +201,7 @@ function showResults(){
  const stats=el("div","hd-stats");
  [["Found",success.length+" / 4"],["Average find time",mean===null?"—":mean.toFixed(1)+"s"],["Missed taps",rows.reduce((a,r)=>a+r.misses,0)]].forEach(([label,value])=>{const card=el("div","hd-stat");card.append(el("strong","",value),el("span","",label));stats.append(card);});
  const detail=el("div","hd-results-list");
- rows.forEach(r=>{const line=el("div","hd-result-line");line.append(el("span","",String(r.round).padStart(2,"0")+" · "+targets[r.round-1].label),el("strong","",r.correct?(r.searchTimeMs/1000).toFixed(1)+"s":"Skipped"));detail.append(line);});
+ rows.forEach(r=>{const line=el("div","hd-result-line");line.append(el("span","",String(r.round).padStart(2,"0")+" · "+session.order[r.round-1].label),el("strong","",r.correct?(r.searchTimeMs/1000).toFixed(1)+"s":"Skipped"));detail.append(line);});
  const explain=el("p","hd-note","Measured: touch-based target localization, response time and missed taps. Not measured: precise eye fixation, saccades, or Alzheimer's/Parkinson's risk. Repeated play introduces learning effects.");
  const actions=el("div","hd-result-actions");
  actions.append(button("Play another gallery",startGame),button("Export session JSON",exportData,true));
