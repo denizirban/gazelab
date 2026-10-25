@@ -155,7 +155,7 @@ function runEyeMovementTest(){
   {name:"CENTER",x:.5,y:.5},{name:"UP",x:.5,y:.17},{name:"DOWN",x:.5,y:.83},
   {name:"CENTER",x:.5,y:.5}
  ];
- const readings=[];let index=0,bucket=[],started=performance.now(),lastSampleT=0;const trace=[];const stepWindows=[];
+ const readings=[];let index=0,bucket=[],started=performance.now(),lastSampleT=0;const trace=[];const stepWindows=[];let previousHash=null,changedFrames=0,observedFrames=0;
  const label=el("div","hd-kicker","SINGLE EYE / SIGNAL DIAGNOSTIC");
  const title=el("h2","hd-title","Follow the moving target.");
  const note=el("p","hd-description","Follow each dot with your eyes, not your head. Live X/Y measurements below should change as you look around. If they stay flat, calibration cannot be trusted.");
@@ -183,7 +183,7 @@ function runEyeMovementTest(){
    live.textContent="Live iris signal · X "+f[0].toFixed(3)+" · Y "+f[1].toFixed(3);
    meter.textContent="Change from recent baseline · horizontal "+sx.toFixed(3)+" · vertical "+sy.toFixed(3)+" · head "+Math.hypot(f[2]-base.hx,f[3]-base.hy).toFixed(3);
   }else{live.textContent="Eye signal lost — improve indirect lighting and keep eye visible.";}
-  if(f&&now-started>350&&now-eye.latest.t<400&&eye.latest.t!==lastSampleT){lastSampleT=eye.latest.t;const sample={f,t:eye.latest.t,head:eye.latest.head,iris:mode==="right"?eye.latest.right:eye.latest.left};bucket.push(sample);trace.push({t:sample.t,x:f[0],y:f[1],headX:f[2],headY:f[3],rawX:sample.iris?.rawX??null,rawY:sample.iris?.rawY??null,eyeWidth:sample.iris?.eyeWidth??null,eyeHeight:sample.iris?.eyeHeight??null,step:step.name});drawGraph();}
+  if(f&&now-started>350&&now-eye.latest.t<400&&eye.latest.t!==lastSampleT){lastSampleT=eye.latest.t;const sample={f,t:eye.latest.t,head:eye.latest.head,iris:mode==="right"?eye.latest.right:eye.latest.left};bucket.push(sample);const pix=eye.pixelSignal;if(pix&&Number.isFinite(pix.hash)){observedFrames++;if(previousHash!==null&&pix.hash!==previousHash)changedFrames++;previousHash=pix.hash;}trace.push({pixelHash:pix?.hash??null,pixelX:pix?.centerX??null,pixelY:pix?.centerY??null,videoTime:pix?.videoTime??null,pixelBrightness:pix?.brightness??null,t:sample.t,x:f[0],y:f[1],headX:f[2],headY:f[3],rawX:sample.iris?.rawX??null,rawY:sample.iris?.rawY??null,eyeWidth:sample.iris?.eyeWidth??null,eyeHeight:sample.iris?.eyeHeight??null,step:step.name});drawGraph();}
   if(now-started>=1600){
    stepWindows.push({name:step.name,start:started,end:now,count:bucket.length});
    const median=k=>{const values=bucket.map(p=>p.f[k]).sort((a,b)=>a-b);return values.length?values[Math.floor(values.length/2)]:null;};
@@ -201,7 +201,7 @@ function runEyeMovementTest(){
   const drift=centers.length>=2?Math.hypot(centers[centers.length-1].x-centers[0].x,centers[centers.length-1].y-centers[0].y):null;
   const headDrift=centers.length>=2?Math.hypot(centers[centers.length-1].headX-centers[0].headX,centers[centers.length-1].headY-centers[0].headY):null;
   const coverage=readings.reduce((a,p)=>a+p.samples,0);
-  eye.diagnostic={version:"single-eye-v2-eyelid-normalized",eyeMode:mode,readings,horizontal,vertical,horizontalDelta:dx,verticalDelta:dy,centerDrift:drift,headDrift,sampleCount:coverage,trace,stepWindows,processingFps:eye.actualFps,uniqueSampleRateHz:trace.length>1?1000*(trace.length-1)/Math.max(1,trace[trace.length-1].t-trace[0].t):null};
+  eye.diagnostic={version:"single-eye-v2-eyelid-normalized",eyeMode:mode,readings,horizontal,vertical,horizontalDelta:dx,verticalDelta:dy,centerDrift:drift,headDrift,sampleCount:coverage,trace,stepWindows,pixelChangedFrames:changedFrames,pixelObservedFrames:observedFrames,processingFps:eye.actualFps,uniqueSampleRateHz:trace.length>1?1000*(trace.length-1)/Math.max(1,trace[trace.length-1].t-trace[0].t):null};
   body.replaceChildren(el("div","hd-kicker","EYE SIGNAL / RESULTS"),el("h2","hd-title","Movement signal report."));
   const lines=[
    "Horizontal iris signal: "+horizontal+(dx===null?"":" (Δ "+dx.toFixed(3)+")"),
@@ -211,6 +211,7 @@ function runEyeMovementTest(){
    "Usable samples: "+coverage,
    "Iris opening (center): "+(center?.eyeHeight==null?"unavailable":center.eyeHeight.toFixed(4))
   ];
+  lines.push("Eye image changed between frames: "+changedFrames+" / "+Math.max(0,observedFrames-1));
   lines.push("Unique camera samples per second: "+(eye.diagnostic.uniqueSampleRateHz?.toFixed(1)??"—"));
   lines.push("MediaPipe processing rate: "+(eye.actualFps?.toFixed(1)??"—")+" fps");
   lines.forEach(line=>body.append(el("p","hd-eye-status",line)));
@@ -221,6 +222,10 @@ function runEyeMovementTest(){
   const horizontalRaw=Number.isFinite(left?.rawX)&&Number.isFinite(right?.rawX)?right.rawX-left.rawX:null;
   const verticalRaw=Number.isFinite(up?.rawY)&&Number.isFinite(down?.rawY)?down.rawY-up.rawY:null;
   positions.append(el("p","hd-note","Raw iris camera displacement · horizontal Δ "+fmt(horizontalRaw)+" · vertical Δ "+fmt(verticalRaw)+". Raw coordinates also include head motion; these are diagnostics, not gaze coordinates."));
+  const px=trace.filter(p=>Number.isFinite(p.pixelX));const range=k=>px.length?Math.max(...px.map(p=>p[k]))-Math.min(...px.map(p=>p[k])):null;
+  positions.append(el("p","hd-note","Independent eye-image dark-pixel centroid range · X "+fmt(range("pixelX"))+" · Y "+fmt(range("pixelY"))+". This is an illumination-sensitive diagnostic, not a pupil measurement."));
+  const diagnostic=changedFrames===0?"No changing eye-image pixels detected: check camera frame delivery.":Math.abs(dx||0)<.004&&Math.abs(dy||0)<.004?"Eye image changes but iris landmarks remain almost fixed: inspect landmark tracking or test timing.":"Eye image and landmarks both change; inspect target alignment and calibration.";
+  positions.append(el("p","hd-note","V4 diagnostic: "+diagnostic));
   body.append(positions);
   body.append(chart,el("p","hd-note","Live signal trace: teal = horizontal iris X; orange = vertical iris Y. Each axis is scaled separately for visibility; graph shape alone does not prove tracking accuracy."));
   body.append(el("p","hd-note","Positive/negative describes camera coordinate direction, not whether screen gaze is accurate. Weak signals, head movement and center drift can explain failed calibration. This test does not validate gaze position."));
@@ -339,6 +344,29 @@ function collectEyes(){
  try{
   const lm=eye.model.detectForVideo(eye.video,now).faceLandmarks?.[0];
   eye.lastLandmarks=lm||null;
+  // V4: independent video-frame fingerprint and eye-region pixel centroid.
+  if(!eye.pixelCanvas){eye.pixelCanvas=document.createElement("canvas");eye.pixelCanvas.width=48;eye.pixelCanvas.height=24;eye.pixelCtx=eye.pixelCanvas.getContext("2d",{willReadFrequently:true});}
+  try{
+   const v=eye.video,ctx=eye.pixelCtx,w=v.videoWidth,h=v.videoHeight;
+   if(w&&h&&ctx){
+    const selected=selectedEyeMode==="right"?[362,263,386,374]:[33,133,159,145];
+    const points=lm&&selected.every(i=>lm[i])?selected.map(i=>lm[i]):null;
+    const cx=points?(points[0].x+points[1].x)*w/2:w*.5,cy=points?(points[0].y+points[1].y)*h/2:h*.45;
+    const width=points?Math.max(36,Math.abs(points[0].x-points[1].x)*w*1.9):w*.18;
+    const height=width*.55;
+    ctx.drawImage(v,Math.max(0,cx-width/2),Math.max(0,cy-height/2),Math.min(width,w),Math.min(height,h),0,0,48,24);
+    const rgba=ctx.getImageData(0,0,48,24).data;
+    let hash=2166136261,darkX=0,darkY=0,darkWeight=0,lumSum=0;
+    for(let y=0;y<24;y+=2)for(let x=0;x<48;x+=2){
+     const i=(y*48+x)*4,lum=(rgba[i]*.299+rgba[i+1]*.587+rgba[i+2]*.114);
+     const q=Math.round(lum/8);hash=Math.imul(hash^q,16777619)>>>0;lumSum+=lum;
+     const weight=Math.max(0,115-lum);darkX+=weight*x;darkY+=weight*y;darkWeight+=weight;
+    }
+    const previous=eye.pixelSignal;
+    eye.pixelSignal={t:now,hash,changed:!!previous&&previous.hash!==hash,videoTime:v.currentTime,centerX:darkWeight?darkX/darkWeight/48:null,centerY:darkWeight?darkY/darkWeight/24:null,brightness:lumSum/288,landmarksAvailable:!!points};
+   }
+  }catch(err){eye.pixelSignal={t:now,error:String(err)};}
+
   if(eye.lastFrameAt&&now>eye.lastFrameAt)eye.actualFps=eye.actualFps*.8+(.2*1000/(now-eye.lastFrameAt));
   eye.lastFrameAt=now;eye.frames++;
   let x=null,y=null,head=null,left=null,right=null;
