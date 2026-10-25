@@ -342,19 +342,42 @@ async function enableEyes(){
   try{model=await mp.FaceLandmarker.createFromOptions(vision,opts);}
   catch(_){opts.baseOptions.delegate="CPU";model=await mp.FaceLandmarker.createFromOptions(vision,opts);}
   eye={stream,video,model,timer:0,start:0,samples:[],lastLandmarks:null,frames:0,lastFrameAt:0,actualFps:0};
-  eye.timer=setInterval(collectEyes,125);
+  // Process only freshly presented camera frames, not timer ticks on stale video.
+  // A repeated frame can otherwise make both the iris marker and pixel estimate look frozen.
+  if(typeof video.requestVideoFrameCallback==="function"){
+   eye.frameCallbackActive=true;
+   const onFrame=(_time,meta)=>{
+    if(!eye||eye.video!==video)return;
+    eye.frameCallbackId=video.requestVideoFrameCallback(onFrame);
+    if(eye.processing)return;
+    eye.processing=true;
+    try{collectEyes(meta.mediaTime);}finally{eye.processing=false;}
+   };
+   eye.frameCallbackId=video.requestVideoFrameCallback(onFrame);
+  }else{
+   eye.timer=setInterval(()=>{
+    if(!eye||eye.video!==video)return;
+    const frameTime=video.currentTime;
+    if(frameTime===eye.lastProcessedVideoTime)return;
+    collectEyes(frameTime);
+   },125);
+  }
   return true;
  }catch(_){if(model)model.close();if(stream)stream.getTracks().forEach(t=>t.stop());return false;}
 }
 function stopEyes(){
  if(!eye)return;
  clearInterval(eye.timer);
+ if(eye.frameCallbackId!=null&&eye.video.cancelVideoFrameCallback)eye.video.cancelVideoFrameCallback(eye.frameCallbackId);
  eye.stream.getTracks().forEach(t=>t.stop());
  try{eye.model.close();}catch(_){}
  eye.video.srcObject=null;eye=null;
 }
-function collectEyes(){
+function collectEyes(frameTime){
  if(!eye||eye.video.readyState<2)return;
+ const videoTime=Number.isFinite(frameTime)?frameTime:eye.video.currentTime;
+ if(videoTime===eye.lastProcessedVideoTime)return;
+ eye.lastProcessedVideoTime=videoTime;
  const now=performance.now();
  try{
   const lm=eye.model.detectForVideo(eye.video,now).faceLandmarks?.[0];
