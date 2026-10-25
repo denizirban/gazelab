@@ -486,13 +486,33 @@ const choiceBank=[
  {id:"privacy-connection",tier:3,q:"Which matters more for this evening?",a:["🔒","Personal space","#788aa9"],b:["💬","Connection","#b98095"]},
  {id:"novelty-quality",tier:3,q:"Which purchase would you rather make?",a:["🎈","Something unexpected","#c58a8e"],b:["💎","Something lasting","#6d8da9"]},
  {id:"question-answer",tier:3,q:"What sounds more satisfying?",a:["❓","A fascinating question","#9b7fb6"],b:["🧠","A clear answer","#648ea4"]},
- {id:"solo-team",tier:3,q:"Which project setup would you choose?",a:["🧑‍🎨","Independent ownership","#ab809a"],b:["👥","Shared responsibility","#7199a1"]}
+ {id:"solo-team",tier:3,q:"Which project setup would you choose?",a:["🧑‍🎨","Independent ownership","#ab809a"],b:["👥","Shared responsibility","#7199a1"]},
+ {id:"truth-belong",tier:4,q:"Which cost would you rather accept?",a:["🪞","Be honest and risk rejection","#826a9e"],b:["🤝","Belong and hide disagreement","#6e9c9c"]},
+ {id:"independence-help",tier:4,q:"Which discomfort would you accept?",a:["🧭","Struggle alone but stay independent","#8473ad"],b:["🫂","Ask for help and feel exposed","#b17e91"]},
+ {id:"certainty-regret",tier:4,q:"Which uncertainty is easier to live with?",a:["🚪","Try and risk failure","#a87b9e"],b:["⏳","Wait and risk regret","#688fa7"]},
+ {id:"status-freedom",tier:4,q:"Which trade-off would you choose?",a:["🏛️","More recognition, less freedom","#957ba9"],b:["🪁","More freedom, less recognition","#679d94"]},
+ {id:"peace-truth",tier:4,q:"You cannot have both right now. Choose.",a:["🕊️","Keep the peace","#769e96"],b:["🔎","Confront an uncomfortable truth","#a57d9e"]},
+ {id:"seen-private",tier:4,q:"Which feels more important in this scenario?",a:["👁️","Be deeply understood","#ad7894"],b:["🔐","Keep your inner world private","#718ca9"]},
+ {id:"loyalty-change",tier:4,q:"Which loss would you accept?",a:["🌱","Change and disappoint others","#729c8a"],b:["🧷","Stay loyal and postpone growth","#ad8d72"]},
+ {id:"control-trust",tier:4,q:"Which risk would you take?",a:["🎛️","Control everything, carry the pressure","#8e80b1"],b:["👐","Trust others, lose some control","#6f9b9b"]},
+ {id:"achievement-rest",tier:4,q:"Only one fits into this month. Which?",a:["🏁","Reach a meaningful milestone","#b78674"],b:["🌙","Recover and rest fully","#747fae"]},
+ {id:"protect-open",tier:4,q:"Which vulnerability would you choose?",a:["🛡️","Stay guarded and miss connection","#748eac"],b:["💌","Open up and risk disappointment","#b67e94"]},
+ {id:"right-kind",tier:5,q:"A close friend makes a serious mistake. What matters more?",a:["⚖️","Tell the difficult truth","#7787ae"],b:["🫶","Protect their feelings first","#b27c91"]},
+ {id:"success-meaning",tier:5,q:"You can choose only one career outcome.",a:["🏆","External success without deep meaning","#b18b69"],b:["🪐","Deep meaning without recognition","#8074ad"]},
+ {id:"belong-authentic",tier:5,q:"Which difficult outcome would you accept?",a:["🎭","Be accepted but misunderstood","#a780a3"],b:["🪞","Be authentic but excluded","#708fa0"]},
+ {id:"risk-stagnation",tier:5,q:"Five years from now, which regret is easier?",a:["🧗","I tried and failed publicly","#ae806e"],b:["🕰️","I stayed safe and never tried","#768da7"]},
+ {id:"forgive-boundary",tier:5,q:"Someone you love repeatedly lets you down.",a:["🫂","Give another chance","#b07e9d"],b:["🚧","Set a firm boundary","#758da7"]},
+ {id:"freedom-security",tier:5,q:"Which life would you rather build?",a:["🪁","Uncertain but self-directed","#9b7db0"],b:["🏠","Stable but constrained","#78999a"]},
+ {id:"care-ambition",tier:5,q:"A major opportunity conflicts with a relationship.",a:["🚀","Take the opportunity","#a17dba"],b:["❤️","Prioritize the relationship","#c1808d"]},
+ {id:"known-unknown",tier:5,q:"You can know only one thing about your future.",a:["🔮","What I might become","#987ab2"],b:["🧩","What I might lose","#758faa"]},
+ {id:"self-others",tier:5,q:"A decision helps you but disappoints others.",a:["🌱","Honor my own needs","#759e86"],b:["🤝","Preserve others' expectations","#a58a9c"]},
+ {id:"mistake-inaction",tier:5,q:"Which would you rather explain to yourself?",a:["⚡","A bold mistake","#b77c80"],b:["🧊","A missed opportunity","#748caa"]}
 ];
 function shuffled(items){const a=[...items];for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
 function selectChoicePairs(){
  let history=[];try{history=JSON.parse(localStorage.getItem("gazeLabChoiceHistory")||"[]");if(!Array.isArray(history))history=[];}catch(e){}
  const selected=[];
- for(const tier of [1,2,3]){
+ for(const tier of [2,3,4,5]){
   const candidates=shuffled(choiceBank.filter(p=>p.tier===tier));
   const fresh=candidates.filter(p=>!history.includes(p.id));
   selected.push(...[...fresh,...candidates.filter(p=>history.includes(p.id))].slice(0,2));
@@ -521,7 +541,7 @@ function setupChoice(){
 function startChoice(){
  if(S.phase==="idle"||S.phase==="error"){S.choiceAutoStart=true;startCamera();return;}
  if(S.phase!=="ready"&&S.phase!=="results")return;
- S.choice={round:0,rows:[],phase:"observe",started:performance.now(),samples:[0,0],unknown:0,first:null,last:null,valid:0,sideOrder:shuffled([false,false,false,true,true,true]),pairs:selectChoicePairs(),neutral:[],center:null,orientation:-1,quality:0,trackingMode:S.model?"calibrated":"relative",returnPhase:S.phase};
+ S.choice={round:0,rows:[],phase:"observe",started:performance.now(),samples:[0,0],unknown:0,first:null,last:null,valid:0,sideOrder:shuffled([false,false,false,false,true,true,true,true]),pairs:selectChoicePairs(),neutral:[],center:null,orientation:-1,quality:0,trackingMode:S.model?"calibrated":"relative",returnPhase:S.phase};
  stage("choice");setVisible(els.estimate,false);setVisible(els.metrics,false);setVisible(els.metricExtra,false);setVisible(els.centerInfo,false);
  els.choiceOverlay.hidden=false;if(S.choice.trackingMode==="relative")choiceNeutral();else choiceRound();
 }
@@ -532,7 +552,7 @@ function choiceNeutral(){
 }
 function choiceRound(){
  const c=S.choice;if(!c)return;
- c.phase="observe";c.started=performance.now();c.samples=[0,0];c.unknown=0;c.first=null;c.last=null;c.lastRegion=null;c.valid=0;c.observed=0;c.frames=0;
+ c.phase="observe";c.started=performance.now();c.samples=[0,0];c.unknown=0;c.first=null;c.last=null;c.lastRegion=null;c.valid=0;c.observed=0;c.frames=0;c.transitions=0;c.lastHit=-1;c.gazeTrace=[];
  const repeat=c.round>=c.pairs.length;
  const item=c.pairs[c.round%c.pairs.length],pair=[item.a,item.b],reversed=repeat?!c.sideOrder[c.round%c.pairs.length]:c.sideOrder[c.round];
  c.options=reversed?[pair[1],pair[0]]:pair;c.currentItem=item;
@@ -571,7 +591,7 @@ function tickChoice(now,fresh){
   }
   const dt=c.last?Math.min(200,now-c.last):110;c.last=now;
   c.observed+=dt;
-  if(hit>=0){c.samples[hit]+=dt;c.valid+=dt;if(c.first===null)c.first=hit;c.lastRegion=hit;}
+  if(hit>=0){if(c.lastHit>=0&&c.lastHit!==hit)c.transitions++;c.lastHit=hit;c.samples[hit]+=dt;c.valid+=dt;if(c.first===null)c.first=hit;c.lastRegion=hit;c.gazeTrace.push({t:Math.round(elapsed),side:hit});}
   else c.unknown+=dt;
  }
 
@@ -584,7 +604,7 @@ function tickChoice(now,fresh){
 function chooseChoice(i){
  const c=S.choice;if(!c||c.phase!=="choose")return;
  const total=c.samples[0]+c.samples[1],more=total>0?(c.samples[0]===c.samples[1]?null:(c.samples[0]>c.samples[1]?0:1)):null;
- const row={round:c.round+1,prompt:c.currentItem.q,difficulty:c.currentItem.tier,stimulusId:c.currentItem.id,trackingMode:c.trackingMode,coverage:Math.round(c.valid/6000*100),pass:c.round>=c.pairs.length?2:1,pairId:c.round%c.pairs.length,options:c.options.map(o=>o[1]),chosen:i,chosenLabel:c.options[i][1],lookedLongerAt:more===null?null:c.options[more][1],dwellMs:c.samples.map(Math.round),unclassifiedMs:Math.round(c.unknown),firstRegion:c.first,lastRegion:c.lastRegion,agreement:more===null?null:more===i,validMs:Math.round(c.valid),confidence:null};
+ const row={round:c.round+1,prompt:c.currentItem.q,difficulty:c.currentItem.tier,stimulusId:c.currentItem.id,trackingMode:c.trackingMode,coverage:Math.round(c.valid/6000*100),pass:c.round>=c.pairs.length?2:1,pairId:c.round%c.pairs.length,options:c.options.map(o=>o[1]),chosen:i,chosenLabel:c.options[i][1],lookedLongerAt:more===null?null:c.options[more][1],dwellMs:c.samples.map(Math.round),unclassifiedMs:Math.round(c.unknown),firstRegion:c.first,lastRegion:c.lastRegion,agreement:more===null?null:more===i,validMs:Math.round(c.valid),gazeSwitches:c.transitions,gazeTrace:c.gazeTrace,confidence:null};
  c.rows.push(row);c.phase="confidence";
  els.choiceOverlay.innerHTML="";
  const ch=document.createElement("div");ch.className="choicePrompt";ch.textContent="How sure are you?";
@@ -597,7 +617,7 @@ function revealChoice(row,i,more,total){
  const c=S.choice;if(!c||c.phase!=="confidence")return;c.phase="reveal";
  els.choiceOverlay.innerHTML="";
  const h=document.createElement("div");h.className="choicePrompt";h.textContent=total<1800?"Not enough reliable gaze data":more===null?"Your gaze was evenly split":more===i?"Your gaze and choice matched":"Your gaze and choice differed";
- const d=document.createElement("div");d.className="choiceResult";d.textContent="You chose "+row.chosenLabel+" ("+["","not sure","somewhat sure","very sure"][row.confidence]+"). Estimated viewing time: "+row.options[0]+" "+(row.dwellMs[0]/1000).toFixed(1)+"s · "+row.options[1]+" "+(row.dwellMs[1]/1000).toFixed(1)+"s. First seen: "+(row.firstRegion===null?"unclassified":row.options[row.firstRegion])+". Last seen: "+(row.lastRegion===null?"unclassified":row.options[row.lastRegion])+". This is not a measure of unconscious preference.";
+ const d=document.createElement("div");d.className="choiceResult";d.textContent="You chose "+row.chosenLabel+" ("+["","not sure","somewhat sure","very sure"][row.confidence]+"). Estimated viewing time: "+row.options[0]+" "+(row.dwellMs[0]/1000).toFixed(1)+"s · "+row.options[1]+" "+(row.dwellMs[1]/1000).toFixed(1)+"s. First seen: "+(row.firstRegion===null?"unclassified":row.options[row.firstRegion])+". Last seen: "+(row.lastRegion===null?"unclassified":row.options[row.lastRegion])+". Gaze switches: "+row.gazeSwitches+". This is not a measure of unconscious preference.";
  const next=document.createElement("button");next.className="primary";next.textContent=c.round===c.pairs.length*2-1?"See my results":c.round===c.pairs.length-1?"Start second look":"Next round";next.addEventListener("click",()=>{c.round++;if(c.round===c.pairs.length){showChoiceBreak();}else if(c.round<c.pairs.length*2)choiceRound();else finishChoice();});
  if(total<1800){h.textContent="Not enough gaze data";d.textContent="Only "+row.coverage+"% of the observation was classified. Your choice was saved, but we cannot compare attention reliably. Hold the phone steady and try looking distinctly left and right.";}
  const chart=document.createElement("div");chart.style.cssText="width:min(100%,420px);display:grid;gap:9px;text-align:left";
@@ -608,13 +628,13 @@ function revealChoice(row,i,more,total){
   const fill=document.createElement("div");fill.style.cssText="height:100%;border-radius:20px;background:"+(k===0?"#585cf5":"#f48c80")+";width:"+Math.round(row.dwellMs[k]/6000*100)+"%";
   track.append(fill);wrap.append(name,track);chart.append(wrap);
  });
- const coverage=document.createElement("div");coverage.className="choiceHint";coverage.textContent="Classified gaze coverage: "+row.coverage+"% · "+(row.coverage>=30?"Exploratory estimate":"Insufficient for comparison");
+ const coverage=document.createElement("div");coverage.className="choiceHint";coverage.textContent="Classified gaze coverage: "+row.coverage+"% · Gaze switches: "+row.gazeSwitches+" · "+(row.coverage>=30?"Exploratory estimate":"Insufficient for comparison");
  els.choiceOverlay.append(h,d,chart,coverage,next);
 }
 function showChoiceBreak(){
  const c=S.choice;if(!c)return;c.phase="break";els.choiceOverlay.innerHTML="";
  const h=document.createElement("div");h.className="choicePrompt";h.textContent="Second Look";
- const d=document.createElement("div");d.className="choiceResult";d.textContent="You will see the same six questions again, with left and right positions switched. This repetition is intentional: it lets you compare your choices. There is no right answer.";
+ const d=document.createElement("div");d.className="choiceResult";d.textContent="You will see the same eight questions again, with left and right positions switched. This repetition is intentional: it lets you compare your choices. There is no right answer.";
  const b=document.createElement("button");b.className="primary";b.textContent="Begin second look";b.addEventListener("click",choiceRound);
  els.choiceOverlay.append(h,d,b);setIndicator(true,"Second look · ready");
 }
@@ -624,15 +644,17 @@ function finishChoice(){
  const first=c.rows.filter(r=>r.pass===1),second=c.rows.filter(r=>r.pass===2);
  const comparisons=second.map(b=>{const a=first.find(x=>x.pairId===b.pairId);return {pairId:b.pairId,firstChoice:a?.chosenLabel??null,secondChoice:b.chosenLabel,changed:a?a.chosenLabel!==b.chosenLabel:null,firstConfidence:a?.confidence??null,secondConfidence:b.confidence,firstGazeMs:a?.dwellMs??null,secondGazeMs:b.dwellMs,firstOptions:a?.options??null,secondOptions:b.options};});
  const changed=comparisons.filter(x=>x.changed===true).length;
+ const avgSwitches=usable.length?usable.reduce((sum,row)=>sum+row.gazeSwitches,0)/usable.length:0;
+ const lowConfidence=usable.filter(row=>row.confidence===1).length;
  els.choiceOverlay.innerHTML="";
  const h=document.createElement("div");h.className="choicePrompt";h.textContent="Your Eyes vs Your Choice";
  const d=document.createElement("div");d.className="choiceResult";
  const confident=usable.filter(r=>r.confidence===3),confidentMatch=confident.filter(r=>r.agreement).length;
- d.textContent="You changed your choice in "+changed+" of "+comparisons.length+" repeated pairs (with the sides swapped). "+(usable.length?"Gaze favored your chosen option in "+matches+" of "+usable.length+" measurable rounds. High-confidence matches: "+confidentMatch+" of "+confident.length+".":"There was not enough reliable gaze data to compare attention.")+" Changes may reflect many factors, including order, familiarity and uncertainty; they do not reveal hidden desires.";
- const p=document.createElement("div");p.className="choiceHint";p.textContent="12 rounds · 6 repeated pairs · No deception. This is an exploratory visual-attention game, not a personality or subconscious preference test.";
+ d.textContent="You changed your choice in "+changed+" of "+comparisons.length+" repeated pairs (with the sides swapped). "+(usable.length?"Gaze favored your chosen option in "+matches+" of "+usable.length+" measurable rounds. High-confidence matches: "+confidentMatch+" of "+confident.length+". Average gaze switches per measurable round: "+avgSwitches.toFixed(1)+". Low-confidence decisions: "+lowConfidence+".":"There was not enough reliable gaze data to compare attention.")+" Changes may reflect many factors, including order, familiarity and uncertainty; they do not reveal hidden desires.";
+ const p=document.createElement("div");p.className="choiceHint";p.textContent="16 rounds · 8 repeated pairs · No deception. This is an exploratory visual-attention game, not a personality or subconscious preference test.";
  const b=document.createElement("button");b.className="primary";b.textContent="Finish";b.addEventListener("click",endChoice);
  els.choiceOverlay.append(h,d,p,b);
- if(!S.result)S.result={};S.result.choiceExperiment={name:"Your Eyes vs Your Choice",rounds:c.rows,matchingRounds:matches,usableRounds:usable.length,highConfidenceRounds:confident.length,highConfidenceMatches:confidentMatch,trackingMode:c.trackingMode,choiceReversal:{changedPairs:changed,totalPairs:comparisons.length,comparisons,sideSwap:true},disclaimer:"Exploratory, non-clinical. Gaze estimates are not unconscious preference measures."};
+ if(!S.result)S.result={};S.result.choiceExperiment={name:"Your Eyes vs Your Choice",rounds:c.rows,matchingRounds:matches,usableRounds:usable.length,highConfidenceRounds:confident.length,highConfidenceMatches:confidentMatch,averageGazeSwitches:avgSwitches,lowConfidenceRounds:lowConfidence,trackingMode:c.trackingMode,choiceReversal:{changedPairs:changed,totalPairs:comparisons.length,comparisons,sideSwap:true},disclaimer:"Exploratory, non-clinical. Gaze estimates are not unconscious preference measures."};
  c.phase="complete";
 }
 function endChoice(){
