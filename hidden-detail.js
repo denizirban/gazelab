@@ -94,8 +94,10 @@ function nextRound(){
  raf=requestAnimationFrame(clock);
  svg.addEventListener("click",e=>{
   if(!session||session.active?.record!==record||record.correct)return;
-  const bounds=svg.getBoundingClientRect();
-  const x=(e.clientX-bounds.left)/bounds.width*700,y=(e.clientY-bounds.top)/bounds.height*480;
+  const matrix=svg.getScreenCTM();if(!matrix)return;
+  const point=svg.createSVGPoint();point.x=e.clientX;point.y=e.clientY;
+  const local=point.matrixTransform(matrix.inverse());
+  const x=local.x,y=local.y;
   const distance=Math.hypot(x-scene.target.x,y-scene.target.y);
   const correct=distance<=Math.max(scene.target.r,17);
   record.attempts.push({x:Math.round(x),y:Math.round(y),elapsedMs:Math.round(performance.now()-start),correct});
