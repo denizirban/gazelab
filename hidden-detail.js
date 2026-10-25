@@ -37,7 +37,7 @@ const realArtworks=[
  {title:"The Night Watch",artist:"Rembrandt",file:"The_Nightwatch_by_Rembrandt.jpg",source:"https://commons.wikimedia.org/wiki/File:The_Nightwatch_by_Rembrandt.jpg"},
  {title:"A Sunday Afternoon on the Island of La Grande Jatte",artist:"Georges Seurat",file:"A_Sunday_on_La_Grande_Jatte,_Georges_Seurat,_1884.jpg",source:"https://commons.wikimedia.org/wiki/File:A_Sunday_on_La_Grande_Jatte,_Georges_Seurat,_1884.jpg"}
 ];
-function artworkUrl(art){return "https://commons.wikimedia.org/wiki/Special:FilePath/"+art.file+"?width=1000";}
+function artworkUrl(art){return art.url||"https://commons.wikimedia.org/wiki/Special:FilePath/"+art.file+"?width=1000";}
 async function loadRealArtwork(round){
  const art=session.artOrder[round%session.artOrder.length],url=artworkUrl(art);
  return await new Promise(resolve=>{
@@ -264,11 +264,47 @@ function showIntro(){
  const launch=button("Enter the gallery",async()=>{launch.disabled=true;if(check.checked&&!await enableEyes()){caution.textContent="Camera unavailable. Uncheck eye tracking to continue.";launch.disabled=false;return;}if(check.checked)eyeCheck();else startGame();});
  body.append(kicker,title,desc,sample,note,opt,caution,launch);
 }
+const galleryThemes=[
+ {label:"Impressionism",query:"impressionist painting oil canvas"},
+ {label:"Japanese prints",query:"ukiyo-e landscape woodblock print"},
+ {label:"Dutch Golden Age",query:"Dutch Golden Age painting still life"},
+ {label:"Renaissance",query:"Renaissance painting artwork"},
+ {label:"Landscapes",query:"19th century landscape painting"},
+ {label:"Botanical art",query:"botanical illustration painting"},
+ {label:"Portraits",query:"portrait painting 18th century"},
+ {label:"Modern color",query:"post impressionist painting"}
+];
+const recentlySeen=new Set();
+async function discoverArtworks(seed){
+ const random=rand(seed^0x2e9f0a17),themes=[...galleryThemes];
+ for(let i=themes.length-1;i>0;i--){const j=Math.floor(random()*(i+1));[themes[i],themes[j]]=[themes[j],themes[i]];}
+ const discovered=[];
+ for(const theme of themes.slice(0,4)){
+  try{
+   const url="https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch="+encodeURIComponent('filetype:bitmap '+theme.query)+"&gsrnamespace=6&gsrlimit=30&prop=imageinfo&iiprop=url%7Cextmetadata&iiurlwidth=1200&format=json&origin=*";
+   const response=await fetch(url,{signal:AbortSignal.timeout(4500)});
+   if(!response.ok)continue;
+   const data=await response.json();
+   const pages=Object.values(data.query?.pages||{});
+   for(const page of pages){
+    const info=page.imageinfo?.[0],meta=info?.extmetadata||{},license=(meta.LicenseShortName?.value||"").toLowerCase();
+    const publicDomain=/public domain|^cc0|^pd-/.test(license);
+    const imageUrl=info?.thumburl||info?.url;
+    if(!publicDomain||!imageUrl||!/\.(jpg|jpeg|png)(\?|$)/i.test(imageUrl)||recentlySeen.has(page.title))continue;
+    const title=page.title.replace(/^File:/,"").replace(/\.[^.]+$/,"").replaceAll("_"," ").replace(/\s*\(.*?\)/g,"").slice(0,85);
+    if(!title||/scan|signature|stamp|map|coat of arms|flag|logo|poster|photo|photograph/i.test(title))continue;
+    discovered.push({title,artist:"Public-domain collection",url:imageUrl,source:info.descriptionurl||"https://commons.wikimedia.org/wiki/"+encodeURIComponent(page.title),theme:theme.label,id:page.title});
+   }
+  }catch(_){}
+ }
+ for(let i=discovered.length-1;i>0;i--){const j=Math.floor(random()*(i+1));[discovered[i],discovered[j]]=[discovered[j],discovered[i]];}
+ return discovered;
+}
 function startGame(){clearInterval(calibrationTimer);
  const seed=(globalThis.crypto?.getRandomValues?crypto.getRandomValues(new Uint32Array(1))[0]:Date.now()>>>0);
  const random=rand(seed);
  const order=[...targets];for(let i=order.length-1;i>0;i--){const j=Math.floor(random()*(i+1));[order[i],order[j]]=[order[j],order[i]];}
- const artOrder=[...realArtworks];for(let i=artOrder.length-1;i>0;i--){const j=Math.floor(random()*(i+1));[artOrder[i],artOrder[j]]=[artOrder[j],artOrder[i]];}session={id:Date.now().toString(36),round:0,results:[],started:Date.now(),seed,order,artOrder};nextRound();
+ const artOrder=[...realArtworks];for(let i=artOrder.length-1;i>0;i--){const j=Math.floor(random()*(i+1));[artOrder[i],artOrder[j]]=[artOrder[j],artOrder[i]];}session={id:Date.now().toString(36),round:0,results:[],started:Date.now(),seed,order,artOrder,discovery:discoverArtworks(seed)};nextRound();
 }
 function buildArtwork(round,targetId){
  const seed=((session.seed+round*8171+Math.floor(Math.random()*0xffffffff))>>>0);
@@ -304,11 +340,13 @@ async function nextRound(){
  const token=++galleryToken;
  if(round>=4){showResults();return;}
  const item=session.order[round];
- body.replaceChildren(el("p","hd-note","Preparing your artwork…"));
+ body.replaceChildren(el("p","hd-note","Curating your next artwork…"));
+ if(round===0&&session.discovery){const dynamic=await session.discovery;if(!session||token!==galleryToken)return;if(dynamic.length>=4){session.artOrder=dynamic.concat(session.artOrder);}session.discovery=null;}
  let loaded=await loadRealArtwork(round);
  if(!loaded){for(let offset=1;offset<session.artOrder.length&&!loaded;offset++){const idx=(round+offset)%session.artOrder.length;const backup=session.artOrder[idx];session.artOrder[idx]=session.artOrder[round];session.artOrder[round]=backup;loaded=await loadRealArtwork(round);}}
  if(!session||session.round!==round||root.hidden||token!==galleryToken)return;
  const scene=loaded?buildRealScene(round,loaded):buildArtwork(round,item.id);
+ if(scene.real)recentlySeen.add(scene.art.id||scene.art.file);
  const record={round:round+1,target:scene.real?"painting fragment":item.id,artwork:scene.real?{title:scene.art.title,artist:scene.art.artist,source:scene.art.source}:null,distractorCount:scene.real?null:scene.count-1,seed:scene.seed,correct:false,misses:0,searchTimeMs:null,attempts:[]};
  session.active={record,scene,start:0,paused:false};
  body.replaceChildren();
@@ -316,8 +354,9 @@ async function nextRound(){
  const label=el("div","hd-kicker","GALLERY "+String(round+1).padStart(2,"0")+" / 04");
  const time=el("div","hd-timer","0.0s");
  head.append(label,time);
- const title=el("h2","hd-round-title",scene.real?"Find this detail.":"Find "+item.label+".");
- const help=el("p","hd-help",scene.real?scene.art.artist+" · "+scene.art.title:"Explore the artwork. Tap the detail when you find it.");
+ const prompts=["Find the missing fragment.","Where does this detail belong?","Study the composition. Locate this crop.","Can you spot this tiny detail?"];
+ const title=el("h2","hd-round-title",scene.real?prompts[round]:"Find "+item.label+".");
+ const help=el("p","hd-help",scene.real?(scene.art.theme?scene.art.theme+" · ":"")+scene.art.artist+" · "+scene.art.title:"Explore the artwork. Tap the detail when you find it.");
  const art=el("div","hd-art-shell");
  art.innerHTML=scene.svg;
  const svg=art.querySelector("svg");
@@ -399,7 +438,7 @@ function showResults(){
 }
 function exportData(){
  if(!session)return;
- const payload={experiment:"The Hidden Detail",version:"2.3-monocular-comparison",sessionId:session.id,startedAt:new Date(session.started).toISOString(),mode:"touch-visual-search",results:session.results,disclaimer:"Non-clinical visual-search game. Not a validated diagnostic measure. Screen-position estimates are exported only after independent validation; no diagnostic interpretation."};
+ const payload={experiment:"The Hidden Detail",version:"2.4-curated-random-gallery",sessionId:session.id,startedAt:new Date(session.started).toISOString(),mode:"touch-visual-search",results:session.results,disclaimer:"Non-clinical visual-search game. Not a validated diagnostic measure. Screen-position estimates are exported only after independent validation; no diagnostic interpretation."};
  const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
  const url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="irispectra-hidden-detail-"+session.id+".json";document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
