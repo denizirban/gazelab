@@ -187,6 +187,22 @@
       .hd-entry button{align-self:flex-start}
       .hd-panel{border-radius:0!important}
     }
+
+    /* Hidden Detail: gallery colors only, monochrome landing remains intact */
+    .hd-panel{background:#fffdf8!important}
+    .hd-intro-art{background:#172e42!important;border-radius:18px;overflow:hidden}
+    .hd-art-shell,.hd-reveal{background:#172e42!important}
+    .hd-fragment{display:flex;align-items:center;gap:16px;padding:12px 15px;background:#f1ece2;border:1px solid #e8e0d3;border-radius:17px;align-self:flex-start}
+    .hd-fragment span{font-size:10px;letter-spacing:.13em;color:#665f53;font-weight:800;max-width:120px}
+    .hd-fragment canvas{width:86px;height:86px;border-radius:10px;border:3px solid white;box-shadow:0 4px 15px #0002}
+    .hd-camera-check{position:relative;align-self:center;width:min(100%,320px);height:280px;background:#101a22;border-radius:22px;overflow:hidden}
+    .hd-check-video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+    .hd-check-oval{position:absolute;inset:12% 24%;border:2px dashed #ffffffb0;border-radius:50%;pointer-events:none}
+    .hd-check-oval.good{border:3px solid #56ddaa;box-shadow:0 0 0 999px #00000015}
+    .hd-eye-status{font-size:13px;text-align:center;color:#4f5e63;font-weight:600}
+    .hd-button:disabled{opacity:.35;cursor:not-allowed}
+    .hd-fragment+.hd-art-shell{margin-top:1px}
+    @media(max-width:699px){.hd-camera-check{height:235px}.hd-fragment canvas{width:72px;height:72px}}
   </style>
 </head>
 <body>
