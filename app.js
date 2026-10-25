@@ -14,7 +14,7 @@ const validation = [
 ];
 const S = { phase:"idle", stream:null, landmarker:null, raf:0, lastVideoTime:-1,
             feature:null, lastSeen:0, phaseStart:0, stepStart:0, step:0, samples:[],
-            train:[], test:[], model:null, result:null, lastInfer:0, issue:"",alignmentOK:false,alignedSince:0,headBaseline:null,headNow:null,game:null,gameLast:0,gameGaze:null,gameLastSeen:0,paintMode:null,paintPrev:null,paintSmooth:null,paintCenter:null,paintRange:null,paintHue:0 };
+            train:[], test:[], model:null, result:null, lastInfer:0, issue:"",alignmentOK:false,alignedSince:0,headBaseline:null,headNow:null,game:null,gameLast:0,gameGaze:null,gameLastSeen:0,paintMode:null,paintPrev:null,paintSmooth:null,paintCenter:null,paintRange:null,paintHue:0,paintLastSeen:0 };
 const clamp = (x,a,b) => Math.max(a,Math.min(b,x));
 function setMessage(message){els.message.textContent=message;}
 function setIndicator(ok,message,warn=false){els.led.className="led"+(ok?(warn?" warn":" on"):"");els.stateText.textContent=message;}
@@ -231,7 +231,7 @@ function finishResults(){
   const mean=key=>entries.reduce((total,e)=>total+e[key],0)/entries.length;
   const horizontal=mean("errorXPx"),vertical=mean("errorYPx");
   const repeatability=null; // Requires multiple complete runs in controlled conditions.
-  S.result={version:"0.4",horizontalMAECssPx:horizontal,verticalMAECssPx:vertical,repeatabilityAcrossSessions:repeatability,method:"MediaPipe FaceLandmarker, iris-offset affine fit",capturedAt:new Date().toISOString(),
+  S.result={version:"0.6",horizontalMAECssPx:horizontal,verticalMAECssPx:vertical,repeatabilityAcrossSessions:repeatability,method:"MediaPipe FaceLandmarker, iris-offset affine fit",capturedAt:new Date().toISOString(),
     lighting:els.lighting.value,calibration:S.train,validation:entries,
     boardCssPx:{width:board.width,height:board.height},
     medianErrorCssPx:median,medianErrorScreenDiagonalPercent:percent,
@@ -355,13 +355,13 @@ function tickGame(now,fresh){
 function beginPaint(mode){
  if(!S.landmarker||!S.stream)return;
  if(mode==="calibrated"&&!S.model)return;
- S.paintMode=mode;S.paintPrev=null;S.paintSmooth=null;S.paintHue=0;
+ S.paintMode=mode;S.paintPrev=null;S.paintSmooth=null;S.paintHue=0;S.paintLastSeen=0;
  if(mode==="instant"){
   // Relative motion only; center is the starting gaze, not an absolute screen point.
   S.paintCenter=S.feature?[...S.feature]:null;
   S.paintRange=[.11,.085];
  }
- stage("paint");setVisible(els.alignment,false);setVisible(els.centerInfo,false);
+ stage("paint");els.board.classList.add("paintMode");setVisible(els.alignment,false);setVisible(els.centerInfo,false);
  setVisible(els.estimate,false);setVisible(els.metrics,false);setVisible(els.metricExtra,false);
  setVisible(els.paintCanvas,true);setVisible(els.paintCursor,true);
  const c=els.paintCanvas,rect=els.board.getBoundingClientRect(),dpr=Math.min(2,devicePixelRatio||1);
@@ -372,7 +372,7 @@ function beginPaint(mode){
  els.counter.textContent="Eye Paint";
 }
 function tickPaint(fresh){
- if(!S.feature || performance.now()-S.lastSeen>1500){S.paintPrev=null;setIndicator(false,els.video.paused?"Camera paused":(els.video.readyState<2?"Waiting for camera":"Eyes not detected"));return;}
+ if(!S.feature || performance.now()-S.lastSeen>1500){S.paintPrev=null;S.paintSmooth=null;setIndicator(false,els.video.paused?"Camera paused":(els.video.readyState<2?"Waiting for camera":"Eyes not detected"));return;}
  if(!fresh)return;
  let q;
  if(S.paintMode==="calibrated")q=S.model.predict(S.feature);
@@ -382,13 +382,18 @@ function tickPaint(fresh){
  }
  if(!q.every(Number.isFinite))return;
  q=q.map(v=>clamp(v,.035,.965));
- S.paintSmooth=S.paintSmooth?S.paintSmooth.map((v,i)=>v*.82+q[i]*.18):q;
+ const gap=performance.now()-S.paintLastSeen;S.paintLastSeen=performance.now();
+ if(gap>500){S.paintPrev=null;S.paintSmooth=null;}
+ const alpha=.16;
+ S.paintSmooth=S.paintSmooth?S.paintSmooth.map((v,i)=>v*(1-alpha)+q[i]*alpha):q;
  const [x,y]=S.paintSmooth;
  place(els.paintCursor,x,y);
  const rect=els.board.getBoundingClientRect(),ctx=els.paintCanvas.getContext("2d");
  if(S.paintPrev){
   const dx=(x-S.paintPrev[0])*rect.width,dy=(y-S.paintPrev[1])*rect.height;
-  if(Math.hypot(dx,dy)<Math.max(55,rect.width*.15)){
+  const step=Math.hypot(dx,dy);
+  // Reject large tracking jumps and tiny jitter; do not connect disconnected strokes.
+  if(step>=.85 && step<Math.min(38,rect.width*.095)){
    ctx.beginPath();ctx.moveTo(S.paintPrev[0]*rect.width,S.paintPrev[1]*rect.height);
    ctx.lineTo(x*rect.width,y*rect.height);ctx.lineWidth=4;ctx.strokeStyle="hsl("+Math.round(S.paintHue%360)+",95%,55%)";ctx.lineCap="round";ctx.lineJoin="round";ctx.stroke();S.paintHue+=8;
   }
@@ -402,7 +407,7 @@ function clearPaint(){
 }
 function endPaint(){
  if(S.phase!=="paint")return;
- setVisible(els.paintCanvas,false);setVisible(els.paintCursor,false);S.paintPrev=null;
+ setVisible(els.paintCanvas,false);setVisible(els.paintCursor,false);els.board.classList.remove("paintMode");S.paintPrev=null;
  stage(S.model?"results":"ready");
  if(S.model){setVisible(els.metrics,true);setVisible(els.metricExtra,true);announce("Paint complete","Compare instant and calibrated gaze drawing.");}
  else{announce("Ready to calibrate","Align your face to begin calibration.");}
@@ -413,7 +418,7 @@ function restart(){
 }
 function stopCamera(){
   releaseCamera();S.feature=null;S.model=null;S.result=null;S.headBaseline=null;S.alignmentOK=false;S.alignedSince=0;
-  stage("idle");setVisible(els.target,false);setVisible(els.estimate,false);setVisible(els.metrics,false);setVisible(els.metricExtra,false);setVisible(els.gameHoop,false);setVisible(els.gameBall,false);setVisible(els.paintCanvas,false);setVisible(els.paintCursor,false);
+  els.board.classList.remove("paintMode");stage("idle");setVisible(els.target,false);setVisible(els.estimate,false);setVisible(els.metrics,false);setVisible(els.metricExtra,false);setVisible(els.gameHoop,false);setVisible(els.gameBall,false);setVisible(els.paintCanvas,false);setVisible(els.paintCursor,false);
   setIndicator(false,"Camera off");els.counter.textContent="Ready";
   announce("Control with your eyes.","Allow camera access to begin. Processing stays on your device.");
   setMessage("Camera stopped. No images were saved.");
