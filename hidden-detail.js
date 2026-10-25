@@ -30,7 +30,11 @@ let calibrationTimer=0;
 const realArtworks=[
  {title:"The Great Wave off Kanagawa",artist:"Katsushika Hokusai",file:"The_Great_Wave_off_Kanagawa.jpg",source:"https://commons.wikimedia.org/wiki/File:The_Great_Wave_off_Kanagawa.jpg"},
  {title:"Girl with a Pearl Earring",artist:"Johannes Vermeer",file:"Girl_with_a_Pearl_Earring.jpg",source:"https://commons.wikimedia.org/wiki/File:Girl_with_a_Pearl_Earring.jpg"},
- {title:"The Starry Night",artist:"Vincent van Gogh",file:"Starry_Night.webp",source:"https://commons.wikimedia.org/wiki/File:Starry_Night.webp"}
+ {title:"The Starry Night",artist:"Vincent van Gogh",file:"Van_Gogh_-_Starry_Night_-_Google_Art_Project.jpg",source:"https://commons.wikimedia.org/wiki/File:Van_Gogh_-_Starry_Night_-_Google_Art_Project.jpg"},
+ {title:"Mona Lisa",artist:"Leonardo da Vinci",file:"Mona_Lisa,_by_Leonardo_da_Vinci,_from_C2RMF_retouched.jpg",source:"https://commons.wikimedia.org/wiki/File:Mona_Lisa,_by_Leonardo_da_Vinci,_from_C2RMF_retouched.jpg"},
+ {title:"The Birth of Venus",artist:"Sandro Botticelli",file:"Sandro_Botticelli_-_La_nascita_di_Venere_-_Google_Art_Project_-_edited.jpg",source:"https://commons.wikimedia.org/wiki/File:Sandro_Botticelli_-_La_nascita_di_Venere_-_Google_Art_Project_-_edited.jpg"},
+ {title:"The Night Watch",artist:"Rembrandt",file:"The_Nightwatch_by_Rembrandt.jpg",source:"https://commons.wikimedia.org/wiki/File:The_Nightwatch_by_Rembrandt.jpg"},
+ {title:"A Sunday Afternoon on the Island of La Grande Jatte",artist:"Georges Seurat",file:"A_Sunday_on_La_Grande_Jatte,_Georges_Seurat,_1884.jpg",source:"https://commons.wikimedia.org/wiki/File:A_Sunday_on_La_Grande_Jatte,_Georges_Seurat,_1884.jpg"}
 ];
 function artworkUrl(art){return "https://commons.wikimedia.org/wiki/Special:FilePath/"+art.file+"?width=1000";}
 async function loadRealArtwork(round){
@@ -284,7 +288,8 @@ async function nextRound(){
  if(round>=4){showResults();return;}
  const item=session.order[round];
  body.replaceChildren(el("p","hd-note","Preparing your artwork…"));
- const loaded=await loadRealArtwork(round);
+ let loaded=await loadRealArtwork(round);
+ if(!loaded){for(let offset=1;offset<session.artOrder.length&&!loaded;offset++){const idx=(round+offset)%session.artOrder.length;const backup=session.artOrder[idx];session.artOrder[idx]=session.artOrder[round];session.artOrder[round]=backup;loaded=await loadRealArtwork(round);}}
  if(!session||session.round!==round||root.hidden||token!==galleryToken)return;
  const scene=loaded?buildRealScene(round,loaded):buildArtwork(round,item.id);
  const record={round:round+1,target:scene.real?"painting fragment":item.id,artwork:scene.real?{title:scene.art.title,artist:scene.art.artist,source:scene.art.source}:null,distractorCount:scene.real?null:scene.count-1,seed:scene.seed,correct:false,misses:0,searchTimeMs:null,attempts:[]};
@@ -377,7 +382,7 @@ function showResults(){
 }
 function exportData(){
  if(!session)return;
- const payload={experiment:"The Hidden Detail",version:"2.0-calibrated-gaze",sessionId:session.id,startedAt:new Date(session.started).toISOString(),mode:"touch-visual-search",results:session.results,disclaimer:"Non-clinical visual-search game. Not a validated diagnostic measure. Screen-position estimates are exported only after independent validation; no diagnostic interpretation."};
+ const payload={experiment:"The Hidden Detail",version:"2.1-art-rotation-calibrated-gaze",sessionId:session.id,startedAt:new Date(session.started).toISOString(),mode:"touch-visual-search",results:session.results,disclaimer:"Non-clinical visual-search game. Not a validated diagnostic measure. Screen-position estimates are exported only after independent validation; no diagnostic interpretation."};
  const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
  const url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="irispectra-hidden-detail-"+session.id+".json";document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
