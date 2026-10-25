@@ -183,7 +183,7 @@ function runEyeMovementTest(){
    live.textContent="Live iris signal · X "+f[0].toFixed(3)+" · Y "+f[1].toFixed(3);
    meter.textContent="Change from recent baseline · horizontal "+sx.toFixed(3)+" · vertical "+sy.toFixed(3)+" · head "+Math.hypot(f[2]-base.hx,f[3]-base.hy).toFixed(3);
   }else{live.textContent="Eye signal lost — improve indirect lighting and keep eye visible.";}
-  if(f&&now-started>350&&now-eye.latest.t<400&&eye.latest.t!==lastSampleT){lastSampleT=eye.latest.t;const sample={f,t:eye.latest.t,head:eye.latest.head,iris:mode==="right"?eye.latest.right:eye.latest.left};bucket.push(sample);const pix=eye.pixelSignal;if(pix&&Number.isFinite(pix.hash)){observedFrames++;if(previousHash!==null&&pix.hash!==previousHash)changedFrames++;previousHash=pix.hash;}trace.push({pixelHash:pix?.hash??null,pixelX:pix?.centerX??null,pixelY:pix?.centerY??null,videoTime:pix?.videoTime??null,pixelBrightness:pix?.brightness??null,t:sample.t,x:f[0],y:f[1],headX:f[2],headY:f[3],rawX:sample.iris?.rawX??null,rawY:sample.iris?.rawY??null,eyeWidth:sample.iris?.eyeWidth??null,eyeHeight:sample.iris?.eyeHeight??null,step:step.name});drawGraph();}
+  if(f&&now-started>350&&now-eye.latest.t<400&&eye.latest.t!==lastSampleT){lastSampleT=eye.latest.t;const sample={f,t:eye.latest.t,head:eye.latest.head,iris:mode==="right"?eye.latest.right:eye.latest.left};bucket.push(sample);const pix=eye.pixelSignal;if(pix&&Number.isFinite(pix.hash)){observedFrames++;if(previousHash!==null&&pix.hash!==previousHash)changedFrames++;previousHash=pix.hash;}trace.push({pixelHash:pix?.hash??null,pixelX:pix?.centerX??null,pixelY:pix?.centerY??null,pupilX:pix?.pupilCandidateX??null,pupilY:pix?.pupilCandidateY??null,videoTime:pix?.videoTime??null,pixelBrightness:pix?.brightness??null,t:sample.t,x:f[0],y:f[1],headX:f[2],headY:f[3],rawX:sample.iris?.rawX??null,rawY:sample.iris?.rawY??null,eyeWidth:sample.iris?.eyeWidth??null,eyeHeight:sample.iris?.eyeHeight??null,step:step.name});drawGraph();}
   if(now-started>=1600){
    stepWindows.push({name:step.name,start:started,end:now,count:bucket.length});
    const median=k=>{const values=bucket.map(p=>p.f[k]).sort((a,b)=>a-b);return values.length?values[Math.floor(values.length/2)]:null;};
@@ -221,6 +221,21 @@ function runEyeMovementTest(){
   readings.forEach((p,i)=>positions.append(el("p","",String(i+1).padStart(2,"0")+" · "+p.name+" · X "+fmt(p.x)+" · Y "+fmt(p.y)+" · raw X "+fmt(p.rawX)+" · raw Y "+fmt(p.rawY)+" · "+p.samples+" unique frames")));
   const horizontalRaw=Number.isFinite(left?.rawX)&&Number.isFinite(right?.rawX)?right.rawX-left.rawX:null;
   const verticalRaw=Number.isFinite(up?.rawY)&&Number.isFinite(down?.rawY)?down.rawY-up.rawY:null;
+  const pixelMedian=(name,key)=>{const vals=trace.filter(p=>p.step===name&&Number.isFinite(p[key])).map(p=>p[key]).sort((a,b)=>a-b);return vals.length?vals[Math.floor(vals.length/2)]:null;};
+  const pixelRows=el("div","hd-eye-report");
+  pixelRows.append(el("strong","","V5 · Independent eye-image motion estimate"));
+  for(const name of ["LEFT","RIGHT","UP","DOWN"]){
+   const samples=trace.filter(p=>p.step===name&&Number.isFinite(p.pupilX));
+   const med=k=>{const a=samples.map(p=>p[k]).filter(Number.isFinite).sort((a,b)=>a-b);return a.length?a[Math.floor(a.length/2)]:null;};
+   pixelRows.append(el("p","",name+" · pixel X "+fmt(med("pupilX"))+" · pixel Y "+fmt(med("pupilY"))+" · "+samples.length+" frames"));
+  }
+  const pixelDx=Number.isFinite(pixelMedian("RIGHT","pupilX"))&&Number.isFinite(pixelMedian("LEFT","pupilX"))?pixelMedian("RIGHT","pupilX")-pixelMedian("LEFT","pupilX"):null;
+  const pixelDy=Number.isFinite(pixelMedian("DOWN","pupilY"))&&Number.isFinite(pixelMedian("UP","pupilY"))?pixelMedian("DOWN","pupilY")-pixelMedian("UP","pupilY"):null;
+  pixelRows.append(el("p","hd-note","Independent horizontal Δ "+fmt(pixelDx)+" · vertical Δ "+fmt(pixelDy)+". This contrast-weighted dark-region centroid is sensitive to lighting, lashes and eyelids. It is not a validated pupil detector."));
+  if(Math.abs(dx??0)<.004&&Number.isFinite(pixelDx)&&Math.abs(pixelDx)>.015)pixelRows.append(el("p","hd-note","Disagreement: image-based horizontal estimate changes while MediaPipe stays nearly fixed. Review landmark mapping and camera orientation."));
+  else if(Math.abs(dx??0)<.004&&Math.abs(pixelDx??0)<.015)pixelRows.append(el("p","hd-note","Both methods show little horizontal separation. Verify target-following, eye crop and lighting before calibrating."));
+  eye.diagnostic.independentPixel={horizontalDelta:pixelDx,verticalDelta:pixelDy,method:"contrast-weighted central crop centroid; unvalidated"};
+  positions.append(pixelRows);
   positions.append(el("p","hd-note","Raw iris camera displacement · horizontal Δ "+fmt(horizontalRaw)+" · vertical Δ "+fmt(verticalRaw)+". Raw coordinates also include head motion; these are diagnostics, not gaze coordinates."));
   const px=trace.filter(p=>Number.isFinite(p.pixelX));const range=k=>px.length?Math.max(...px.map(p=>p[k]))-Math.min(...px.map(p=>p[k])):null;
   positions.append(el("p","hd-note","Independent eye-image dark-pixel centroid range · X "+fmt(range("pixelX"))+" · Y "+fmt(range("pixelY"))+". This is an illumination-sensitive diagnostic, not a pupil measurement."));
@@ -362,8 +377,20 @@ function collectEyes(){
      const q=Math.round(lum/8);hash=Math.imul(hash^q,16777619)>>>0;lumSum+=lum;
      const weight=Math.max(0,115-lum);darkX+=weight*x;darkY+=weight*y;darkWeight+=weight;
     }
+    // V5: contrast-weighted dark-region centroid inside the central eye crop.
+    // Avoid eyelids and corners; compare against MediaPipe rather than claiming pupil accuracy.
+    let sumX=0,sumY=0,sumW=0,localMean=0,n=0;
+    for(let yy=7;yy<18;yy++)for(let xx=9;xx<39;xx++){const ii=(yy*48+xx)*4;localMean+=rgba[ii]*.299+rgba[ii+1]*.587+rgba[ii+2]*.114;n++;}
+    localMean/=Math.max(1,n);
+    for(let yy=7;yy<18;yy++)for(let xx=9;xx<39;xx++){
+      const ii=(yy*48+xx)*4,light=rgba[ii]*.299+rgba[ii+1]*.587+rgba[ii+2]*.114;
+      const weight=Math.pow(Math.max(0,localMean-light-8),1.5);
+      sumX+=xx*weight;sumY+=yy*weight;sumW+=weight;
+    }
+    const pupilCandidateX=sumW>200?sumX/sumW/48:null;
+    const pupilCandidateY=sumW>200?sumY/sumW/24:null;
     const previous=eye.pixelSignal;
-    eye.pixelSignal={t:now,hash,changed:!!previous&&previous.hash!==hash,videoTime:v.currentTime,centerX:darkWeight?darkX/darkWeight/48:null,centerY:darkWeight?darkY/darkWeight/24:null,brightness:lumSum/288,landmarksAvailable:!!points};
+    eye.pixelSignal={t:now,hash,changed:!!previous&&previous.hash!==hash,videoTime:v.currentTime,centerX:darkWeight?darkX/darkWeight/48:null,centerY:darkWeight?darkY/darkWeight/24:null,pupilCandidateX,pupilCandidateY,contrast:localMean,brightness:lumSum/288,landmarksAvailable:!!points};
    }
   }catch(err){eye.pixelSignal={t:now,error:String(err)};}
 
