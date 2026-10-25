@@ -23,10 +23,70 @@ const motifs={
 };
 const palette=["#d7b46c","#a66d5d","#7d9c88","#506a80","#c28d8a","#e6c990","#566d62","#a8b3ac"];
 let session=null,raf=0;
+let eye=null;
+async function enableEyes(){
+ if(eye)return true;
+ let stream,model;
+ try{
+  stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:"user",width:{ideal:640},height:{ideal:480}}});
+  const video=document.createElement("video");video.muted=true;video.playsInline=true;video.srcObject=stream;await video.play();
+  const base="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22-rc.20250304";
+  const mp=await import(base+"/vision_bundle.mjs");
+  const vision=await mp.FilesetResolver.forVisionTasks(base+"/wasm");
+  const opts={baseOptions:{modelAssetPath:"https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",delegate:"GPU"},runningMode:"VIDEO",numFaces:1};
+  try{model=await mp.FaceLandmarker.createFromOptions(vision,opts);}
+  catch(_){opts.baseOptions.delegate="CPU";model=await mp.FaceLandmarker.createFromOptions(vision,opts);}
+  eye={stream,video,model,timer:0,start:0,samples:[]};
+  eye.timer=setInterval(collectEyes,125);
+  return true;
+ }catch(_){if(model)model.close();if(stream)stream.getTracks().forEach(t=>t.stop());return false;}
+}
+function stopEyes(){
+ if(!eye)return;
+ clearInterval(eye.timer);
+ eye.stream.getTracks().forEach(t=>t.stop());
+ try{eye.model.close();}catch(_){}
+ eye.video.srcObject=null;eye=null;
+}
+function collectEyes(){
+ if(!eye||!eye.start||eye.video.readyState<2)return;
+ const now=performance.now();
+ try{
+  const lm=eye.model.detectForVideo(eye.video,now).faceLandmarks?.[0];
+  let x=null,head=null;
+  if(lm&&lm.length>=478){
+   const iris=(p,a,b)=>{
+    const A=lm[a],B=lm[b],P=lm[p],dx=B.x-A.x,dy=B.y-A.y,d=dx*dx+dy*dy;
+    return d>.0002?((P.x-(A.x+B.x)/2)*dx+(P.y-(A.y+B.y)/2)*dy)/d:null;
+   };
+   const a=iris(468,33,133),b=iris(473,362,263);
+   if(a!==null&&b!==null&&Number.isFinite(a+b))x=Math.round((a+b)*5000)/10000;
+   head=Math.round((lm[33].x+lm[263].x)*5000)/10000;
+  }
+  eye.samples.push({t:Math.round(now-eye.start),x,head});
+ }catch(_){}
+}
+function beginEyeRound(){if(eye){eye.samples=[];eye.start=performance.now();}}
+function endEyeRound(record){
+ if(!eye){record.eyeTracking={status:"off"};return;}
+ const data=eye.samples;eye.samples=[];eye.start=0;
+ const valid=data.filter(p=>p.x!==null);
+ const xs=valid.map(p=>p.x),hs=valid.map(p=>p.head).filter(Number.isFinite);
+ record.eyeTracking={
+  status:valid.length>=10?"exploratory":"insufficient",
+  sampleCount:data.length,validCount:valid.length,
+  coveragePercent:data.length?Math.round(100*valid.length/data.length):0,
+  horizontalSignalRange:xs.length?Math.max(...xs)-Math.min(...xs):null,
+  headMovementRange:hs.length?Math.max(...hs)-Math.min(...hs):null,
+  samples:data.map(p=>({t:p.t,x:p.x})),
+  note:"Eye-relative iris feature only; no calibrated artwork location, fixation or saccade measurement."
+ };
+}
+
 const rand=(seed)=>()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
 const el=(tag,cls,txt)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(txt!==undefined)n.textContent=txt;return n;};
 function stopClock(){if(raf)cancelAnimationFrame(raf);raf=0;}
-function shutdown(){stopClock();root.hidden=true;document.body.classList.remove("hd-lock");session=null;openButton.focus();}
+function shutdown(){stopClock();stopEyes();root.hidden=true;document.body.classList.remove("hd-lock");session=null;openButton.focus();}
 function button(text,fn,secondary=false){const b=el("button",secondary?"hd-button hd-secondary":"hd-button",text);b.type="button";b.addEventListener("click",fn);return b;}
 function showIntro(){
  body.replaceChildren();
@@ -36,7 +96,10 @@ function showIntro(){
  const sample=el("div","hd-intro-art");
  sample.innerHTML='<svg viewBox="0 0 560 140" aria-hidden="true"><rect width="560" height="140" rx="16" fill="#182b37"/><circle cx="96" cy="70" r="45" fill="#c0a06c"/><path d="M210 30 Q260 90 210 120 Q160 90 210 30" fill="#8cae9a"/><path d="M320 30 Q400 65 320 110 Q270 65 320 30" fill="#b7746d"/><circle cx="466" cy="70" r="43" fill="#536b76"/><path d="M466 43 A27 27 0 1 0 466 97 A20 20 0 1 1 466 43Z" fill="#f2d28c"/></svg>';
  const note=el("p","hd-note","Four artworks · Find a different target each time · Tap where you find it. No camera permission required. Your results stay on this device unless you export them.");
- body.append(kicker,title,desc,sample,note,button("Enter the gallery",startGame));
+ const opt=el("label","hd-eye-toggle");const check=document.createElement("input");check.type="checkbox";opt.append(check,document.createTextNode(" Include experimental eye movement data"));
+ const caution=el("p","hd-note","Optional camera-based iris signal, processed on-device. No camera frames are saved. This is not precise gaze localization.");
+ const launch=button("Enter the gallery",async()=>{launch.disabled=true;if(check.checked&&!await enableEyes()){caution.textContent="Camera unavailable. Uncheck eye tracking to continue.";launch.disabled=false;return;}startGame();});
+ body.append(kicker,title,desc,sample,note,opt,caution,launch);
 }
 function startGame(){session={id:Date.now().toString(36),round:0,results:[],started:Date.now()};nextRound();}
 function buildArtwork(round,targetId){
@@ -89,7 +152,7 @@ function nextRound(){
  const skip=button("Skip artwork",()=>finishRound(false,true),true);
  bottom.append(skip);
  body.append(head,title,help,art,feedback,bottom);
- const start=performance.now();session.active.start=start;
+ const start=performance.now();session.active.start=start;beginEyeRound();
  function clock(now){if(!session||session.active?.record!==record)return;time.textContent=((now-start)/1000).toFixed(1)+"s";raf=requestAnimationFrame(clock);}
  raf=requestAnimationFrame(clock);
  svg.addEventListener("click",e=>{
@@ -110,7 +173,7 @@ function nextRound(){
 function finishRound(found,skipped){
  if(!session)return;stopClock();
  const {record,scene}=session.active;
- record.skipped=!!skipped;record.correct=found;
+ record.skipped=!!skipped;record.correct=found;endEyeRound(record);
  if(record.searchTimeMs===null)record.searchTimeMs=Math.round(performance.now()-session.active.start);
  session.results.push(record);
  body.replaceChildren();
@@ -125,7 +188,7 @@ function finishRound(found,skipped){
  body.append(kicker,title,subtitle,reveal,button(session.round===3?"See my results":"Next artwork",()=>{session.round++;nextRound();}));
 }
 function showResults(){
- if(!session)return;body.replaceChildren();
+ if(!session)return;stopEyes();body.replaceChildren();
  const rows=session.results,success=rows.filter(r=>r.correct),mean=success.length?success.reduce((a,r)=>a+r.searchTimeMs,0)/success.length/1000:null;
  const kicker=el("div","hd-kicker","YOUR VISUAL SEARCH PROFILE");
  const title=el("h2","hd-title","The gallery, through your eyes.");
@@ -137,11 +200,11 @@ function showResults(){
  const explain=el("p","hd-note","Measured: touch-based target localization, response time and missed taps. Not measured: precise eye fixation, saccades, or Alzheimer's/Parkinson's risk. Repeated play introduces learning effects.");
  const actions=el("div","hd-result-actions");
  actions.append(button("Play another gallery",startGame),button("Export session JSON",exportData,true));
- body.append(kicker,title,note,stats,detail,explain,actions);
+ const eyeInfo=el("p","hd-note","Eye tracking: "+rows.filter(r=>r.eyeTracking?.status==="exploratory").length+"/4 rounds with sufficient raw iris samples. Eye features and coverage are included in the export, not interpreted as artwork fixation positions.");body.append(kicker,title,note,stats,detail,eyeInfo,explain,actions);
 }
 function exportData(){
  if(!session)return;
- const payload={experiment:"The Hidden Detail",version:"1.0",sessionId:session.id,startedAt:new Date(session.started).toISOString(),mode:"touch-visual-search",results:session.results,disclaimer:"Non-clinical visual-search game. Not a validated diagnostic measure. No eye tracking performed."};
+ const payload={experiment:"The Hidden Detail",version:"1.1-optional-eye",sessionId:session.id,startedAt:new Date(session.started).toISOString(),mode:"touch-visual-search",results:session.results,disclaimer:"Non-clinical visual-search game. Not a validated diagnostic measure. Optional raw iris feature only; not calibrated gaze."};
  const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
  const url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="irispectra-hidden-detail-"+session.id+".json";document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
