@@ -203,9 +203,9 @@ function collectEyes(){
    };
    const a=iris(468,33,133),b=iris(473,362,263);
    if(a!==null&&b!==null&&Number.isFinite(a.x+b.x)&&Number.isFinite(a.y+b.y)){x=Math.round((a.x+b.x)*5000)/10000;y=Math.round((a.y+b.y)*5000)/10000;eye.lastDetected=now;}
-   head=Math.round((lm[33].x+lm[263].x)*5000)/10000;
+   head={cx:(lm[33].x+lm[263].x)/2,cy:(lm[33].y+lm[263].y)/2,width:Math.hypot(lm[263].x-lm[33].x,lm[263].y-lm[33].y),roll:Math.atan2(lm[263].y-lm[33].y,lm[263].x-lm[33].x)};
   }
-  eye.latest=x===null?null:{x,y,t:now};if(eye.start)eye.samples.push({t:Math.round(now-eye.start),x,y,head});
+  eye.latest=x===null?null:{x,y,head,t:now};if(eye.start)eye.samples.push({t:Math.round(now-eye.start),x,y,head});
  }catch(_){}
 }
 function beginEyeRound(){if(eye){eye.samples=[];eye.start=performance.now();}}
@@ -214,7 +214,7 @@ function endEyeRound(record){
  const data=eye.samples;eye.samples=[];eye.start=0;
  const valid=data.filter(p=>p.x!==null);
  const gaps=[];for(let i=1;i<valid.length;i++)gaps.push(valid[i].t-valid[i-1].t);
- const xs=valid.map(p=>p.x),hs=valid.map(p=>p.head).filter(Number.isFinite);
+ const xs=valid.map(p=>p.x),hs=valid.map(p=>p.head?.cx).filter(Number.isFinite);
  record.eyeTracking={
   status:valid.length>=10?"exploratory":"insufficient",
   sampleCount:data.length,validCount:valid.length,
