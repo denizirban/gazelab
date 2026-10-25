@@ -155,7 +155,7 @@ function runEyeMovementTest(){
   {name:"CENTER",x:.5,y:.5},{name:"UP",x:.5,y:.17},{name:"DOWN",x:.5,y:.83},
   {name:"CENTER",x:.5,y:.5}
  ];
- const readings=[];let index=0,bucket=[],started=performance.now();
+ const readings=[];let index=0,bucket=[],started=performance.now(),lastSampleT=0;const trace=[];
  const label=el("div","hd-kicker","SINGLE EYE / SIGNAL DIAGNOSTIC");
  const title=el("h2","hd-title","Follow the moving target.");
  const note=el("p","hd-description","Follow each dot with your eyes, not your head. Live X/Y measurements below should change as you look around. If they stay flat, calibration cannot be trusted.");
@@ -164,7 +164,10 @@ function runEyeMovementTest(){
  const live=el("div","hd-eye-status","Live iris movement: waiting…");
  const meter=el("div","hd-eye-status","Horizontal: — · Vertical: — · Head: —");
  const liveSamples=[];
- area.append(dot);body.replaceChildren(label,title,note,area,live,meter,status,button("Back to eye check",()=>{clearInterval(calibrationTimer);eyeCheck();},true));
+ const chart=document.createElement("canvas");chart.width=640;chart.height=240;chart.style.cssText="display:block;width:100%;height:150px;border-radius:12px;background:#f2f2f2";
+ const graphCtx=chart.getContext("2d");
+ const drawGraph=()=>{graphCtx.clearRect(0,0,640,240);graphCtx.strokeStyle="#ccc";graphCtx.beginPath();graphCtx.moveTo(0,120);graphCtx.lineTo(640,120);graphCtx.stroke();for(const [axis,color] of [["x","#176b63"],["y","#b05d2c"]]){const vals=trace.slice(-90);if(vals.length<2)continue;const min=Math.min(...vals.map(v=>v[axis])),max=Math.max(...vals.map(v=>v[axis]));graphCtx.strokeStyle=color;graphCtx.lineWidth=3;graphCtx.beginPath();vals.forEach((v,i)=>{const px=i/89*640,py=220-(v[axis]-min)/Math.max(.015,max-min)*200;i?graphCtx.lineTo(px,py):graphCtx.moveTo(px,py);});graphCtx.stroke();}graphCtx.font="18px sans-serif";graphCtx.fillStyle="#176b63";graphCtx.fillText("X horizontal",12,22);graphCtx.fillStyle="#b05d2c";graphCtx.fillText("Y vertical",170,22);};
+ area.append(dot);body.replaceChildren(label,title,note,area,chart,live,meter,status,button("Back to eye check",()=>{clearInterval(calibrationTimer);eyeCheck();},true));
  const mode=selectedEyeMode,token=galleryToken;
  calibrationTimer=setInterval(()=>{
   if(!eye||root.hidden||galleryToken!==token){clearInterval(calibrationTimer);return;}
@@ -180,7 +183,7 @@ function runEyeMovementTest(){
    live.textContent="Live iris signal · X "+f[0].toFixed(3)+" · Y "+f[1].toFixed(3);
    meter.textContent="Change from recent baseline · horizontal "+sx.toFixed(3)+" · vertical "+sy.toFixed(3)+" · head "+Math.hypot(f[2]-base.hx,f[3]-base.hy).toFixed(3);
   }else{live.textContent="Eye signal lost — improve indirect lighting and keep eye visible.";}
-  if(now-started>350&&f&&now-eye.latest.t<400)bucket.push({f,t:now,head:eye.latest.head,iris:mode==="right"?eye.latest.right:eye.latest.left});
+  if(f&&now-started>350&&now-eye.latest.t<400&&eye.latest.t!==lastSampleT){lastSampleT=eye.latest.t;const sample={f,t:eye.latest.t,head:eye.latest.head,iris:mode==="right"?eye.latest.right:eye.latest.left};bucket.push(sample);trace.push({t:sample.t,x:f[0],y:f[1],headX:f[2],headY:f[3],step:step.name});drawGraph();}
   if(now-started>=1600){
    const median=k=>{const values=bucket.map(p=>p.f[k]).sort((a,b)=>a-b);return values.length?values[Math.floor(values.length/2)]:null;};
    readings.push({name:step.name,x:median(0),y:median(1),headX:median(2),headY:median(3),samples:bucket.length,rawX:bucket.length?bucket[Math.floor(bucket.length/2)].iris?.rawX:null,rawY:bucket.length?bucket[Math.floor(bucket.length/2)].iris?.rawY:null,eyeHeight:bucket.length?bucket[Math.floor(bucket.length/2)].iris?.eyeHeight:null});
@@ -197,7 +200,7 @@ function runEyeMovementTest(){
   const drift=centers.length>=2?Math.hypot(centers[centers.length-1].x-centers[0].x,centers[centers.length-1].y-centers[0].y):null;
   const headDrift=centers.length>=2?Math.hypot(centers[centers.length-1].headX-centers[0].headX,centers[centers.length-1].headY-centers[0].headY):null;
   const coverage=readings.reduce((a,p)=>a+p.samples,0);
-  eye.diagnostic={version:"single-eye-v2-eyelid-normalized",eyeMode:mode,readings,horizontal,vertical,horizontalDelta:dx,verticalDelta:dy,centerDrift:drift,headDrift,sampleCount:coverage};
+  eye.diagnostic={version:"single-eye-v2-eyelid-normalized",eyeMode:mode,readings,horizontal,vertical,horizontalDelta:dx,verticalDelta:dy,centerDrift:drift,headDrift,sampleCount:coverage,trace,processingFps:eye.actualFps};
   body.replaceChildren(el("div","hd-kicker","EYE SIGNAL / RESULTS"),el("h2","hd-title","Movement signal report."));
   const lines=[
    "Horizontal iris signal: "+horizontal+(dx===null?"":" (Δ "+dx.toFixed(3)+")"),
@@ -208,6 +211,7 @@ function runEyeMovementTest(){
    "Iris opening (center): "+(center?.eyeHeight==null?"unavailable":center.eyeHeight.toFixed(4))
   ];
   lines.forEach(line=>body.append(el("p","hd-eye-status",line)));
+  body.append(chart,el("p","hd-note","Live signal trace: teal = horizontal iris X; orange = vertical iris Y. Each axis is scaled separately for visibility; graph shape alone does not prove tracking accuracy."));
   body.append(el("p","hd-note","Positive/negative describes camera coordinate direction, not whether screen gaze is accurate. Weak signals, head movement and center drift can explain failed calibration. This test does not validate gaze position."));
   body.append(button("Try quick calibration",runCalibration),button("Repeat movement test",runEyeMovementTest,true),button("Continue with touch only",()=>{stopEyes();startGame();},true));
   const download=button("Export diagnostic JSON",()=>{
