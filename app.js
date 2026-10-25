@@ -448,14 +448,58 @@ els.clearPaint.addEventListener("click",clearPaint);
 els.endPaint.addEventListener("click",endPaint);
 // Your Eyes vs Your Choice — gaze is observed before the participant explicitly chooses.
 // Do not infer unconscious preferences from dwell; this is a within-task exploratory comparison.
-const choiceSets=[
- [["🌙","Midnight","#22253d"],["☀️","Daylight","#f7b850"]],
- [["🌊","Ocean","#247cbd"],["🏔️","Mountain","#64748b"]],
- [["🎨","Create","#e78eac"],["🧭","Explore","#55a99c"]],
- [["🌆","City","#805caa"],["🌿","Nature","#5f9b6d"]],
- [["✨","Surprise","#b58ce2"],["🕯️","Familiar","#d5a567"]],
- [["🎵","Rhythm","#df7391"],["🧩","Puzzle","#4c9baf"]]
+// A rotating question bank. Each session samples two pairs per difficulty tier.
+// Repetition in the second pass is intentional for within-session choice reversal.
+const choiceBank=[
+ {id:"night-day",tier:1,q:"Which atmosphere appeals to you right now?",a:["🌙","Midnight","#25263d"],b:["☀️","Daylight","#eab45c"]},
+ {id:"ocean-mountain",tier:1,q:"Where would you rather be today?",a:["🌊","Ocean","#307eae"],b:["🏔️","Mountain","#657d91"]},
+ {id:"city-nature",tier:1,q:"Where would you spend a free afternoon?",a:["🌆","City","#8265a2"],b:["🌿","Nature","#669b76"]},
+ {id:"rain-sun",tier:1,q:"Choose the atmosphere you want now.",a:["🌧️","Rain","#6688a6"],b:["🌤️","Sunshine","#e9aa58"]},
+ {id:"books-music",tier:1,q:"Which would you choose for an hour alone?",a:["📖","Reading","#b97f64"],b:["🎧","Music","#686ac2"]},
+ {id:"coffee-tea",tier:1,q:"What sounds better at this moment?",a:["☕","Coffee","#9c6a4b"],b:["🍵","Tea","#6e9770"]},
+ {id:"art-travel",tier:1,q:"What would you rather do this weekend?",a:["🎨","Make art","#c77b9a"],b:["🧳","Take a trip","#4b9a9b"]},
+ {id:"dance-walk",tier:1,q:"Which activity sounds more inviting?",a:["💃","Dance","#c86d84"],b:["🚶","Walk","#68998a"]},
+ {id:"space-garden",tier:1,q:"Where would you like to explore?",a:["🪐","Outer space","#5759a3"],b:["🌸","A garden","#b87894"]},
+ {id:"film-concert",tier:1,q:"Choose an evening experience.",a:["🎬","Cinema","#5e6c8e"],b:["🎤","Live concert","#ba6989"]},
+ {id:"create-explore",tier:1,q:"What sounds more exciting right now?",a:["🎨","Create","#df8caa"],b:["🧭","Explore","#53a99c"]},
+ {id:"rhythm-puzzle",tier:1,q:"Which challenge sounds more fun?",a:["🎵","Rhythm","#db7491"],b:["🧩","Puzzle","#4c9baf"]},
+ {id:"new-familiar",tier:2,q:"Which experience would you choose today?",a:["✨","Something new","#9675c6"],b:["🕯️","Something familiar","#bb9461"]},
+ {id:"plan-improvise",tier:2,q:"How would you rather start a day off?",a:["🗓️","Make a plan","#648ba9"],b:["🎲","Improvise","#be7eaa"]},
+ {id:"solo-together",tier:2,q:"Which kind of afternoon appeals more?",a:["🪷","Time alone","#8b84b4"],b:["🫶","Time together","#d17e89"]},
+ {id:"finish-start",tier:2,q:"What feels more satisfying today?",a:["✅","Finish a project","#4f9b87"],b:["🚀","Start an idea","#b17bb9"]},
+ {id:"quiet-energy",tier:2,q:"Which setting would you pick?",a:["🕊️","Quiet","#8b9db4"],b:["⚡","High energy","#d6a054"]},
+ {id:"skill-story",tier:2,q:"Choose how to spend an unexpected hour.",a:["🛠️","Learn a skill","#6a94a1"],b:["📚","Hear a story","#b07a9b"]},
+ {id:"lead-support",tier:2,q:"Which role sounds better for a group project?",a:["🧭","Lead","#8c75b7"],b:["🤝","Support","#6d9d8b"]},
+ {id:"depth-variety",tier:2,q:"Which kind of experience appeals more?",a:["🔎","Go deep","#567da8"],b:["🎡","Try many","#c27e85"]},
+ {id:"surprise-routine",tier:2,q:"Which would you choose for tomorrow?",a:["🎁","A surprise","#c286b7"],b:["🪴","A routine","#739b79"]},
+ {id:"make-share",tier:2,q:"What feels more rewarding?",a:["🧵","Make something","#a979a1"],b:["📣","Share something","#658eaf"]},
+ {id:"slow-fast",tier:2,q:"Which pace feels better today?",a:["🐢","Slow and steady","#729b86"],b:["🏎️","Fast and bold","#b97e68"]},
+ {id:"idea-detail",tier:2,q:"Which task sounds more engaging?",a:["💡","Invent an idea","#ba9559"],b:["🔬","Refine details","#5f96a4"]},
+ {id:"risk-security",tier:3,q:"Which trade-off would you accept today?",a:["🎢","More excitement, less certainty","#b5759b"],b:["🛟","More certainty, less excitement","#678fa8"]},
+ {id:"freedom-structure",tier:3,q:"Choose the workday you would prefer.",a:["🪁","Freedom, fewer guidelines","#9d81b9"],b:["📐","Structure, clearer goals","#668ba9"]},
+ {id:"speed-accuracy",tier:3,q:"If you had to choose one today?",a:["⏱️","Finish sooner","#c08569"],b:["🎯","Get every detail right","#6d9d8c"]},
+ {id:"unknown-known",tier:3,q:"Which opportunity is more appealing?",a:["🚪","Unknown possibilities","#b57b9f"],b:["🗺️","A predictable path","#728da8"]},
+ {id:"now-later",tier:3,q:"Which reward would you prefer?",a:["🍓","A small treat now","#ce7c84"],b:["🌳","A bigger treat later","#729a75"]},
+ {id:"explore-master",tier:3,q:"What would you rather spend a month doing?",a:["🧭","Explore new interests","#7d88b8"],b:["🏆","Master one skill","#c29a65"]},
+ {id:"comfort-growth",tier:3,q:"Which experience appeals more today?",a:["🛋️","Comfort and ease","#9b8aaf"],b:["🧗","Challenge and growth","#689c93"]},
+ {id:"original-reliable",tier:3,q:"What would you rather create?",a:["🪄","An original experiment","#a67fb7"],b:["🧱","A reliable solution","#6e91a0"]},
+ {id:"privacy-connection",tier:3,q:"Which matters more for this evening?",a:["🔒","Personal space","#788aa9"],b:["💬","Connection","#b98095"]},
+ {id:"novelty-quality",tier:3,q:"Which purchase would you rather make?",a:["🎈","Something unexpected","#c58a8e"],b:["💎","Something lasting","#6d8da9"]},
+ {id:"question-answer",tier:3,q:"What sounds more satisfying?",a:["❓","A fascinating question","#9b7fb6"],b:["🧠","A clear answer","#648ea4"]},
+ {id:"solo-team",tier:3,q:"Which project setup would you choose?",a:["🧑‍🎨","Independent ownership","#ab809a"],b:["👥","Shared responsibility","#7199a1"]}
 ];
+function shuffled(items){const a=[...items];for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+function selectChoicePairs(){
+ let history=[];try{history=JSON.parse(localStorage.getItem("gazeLabChoiceHistory")||"[]");if(!Array.isArray(history))history=[];}catch(e){}
+ const selected=[];
+ for(const tier of [1,2,3]){
+  const candidates=shuffled(choiceBank.filter(p=>p.tier===tier));
+  const fresh=candidates.filter(p=>!history.includes(p.id));
+  selected.push(...[...fresh,...candidates.filter(p=>history.includes(p.id))].slice(0,2));
+ }
+ try{localStorage.setItem("gazeLabChoiceHistory",JSON.stringify([...history,...selected.map(p=>p.id)].slice(-30)));}catch(e){}
+ return selected;
+}
 function setupChoice(){
  const css=document.createElement("style");css.textContent=`
  .choiceOverlay{position:absolute;inset:0;background:#fff;z-index:6;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:18px;gap:12px}
@@ -477,7 +521,7 @@ function setupChoice(){
 function startChoice(){
  if(S.phase==="idle"||S.phase==="error"){S.choiceAutoStart=true;startCamera();return;}
  if(S.phase!=="ready"&&S.phase!=="results")return;
- S.choice={round:0,rows:[],phase:"observe",started:performance.now(),samples:[0,0],unknown:0,first:null,last:null,valid:0,sideOrder:[false,false,false,true,true,true].sort(()=>Math.random()-.5),neutral:[],center:null,orientation:-1,quality:0,trackingMode:S.model?"calibrated":"relative",returnPhase:S.phase};
+ S.choice={round:0,rows:[],phase:"observe",started:performance.now(),samples:[0,0],unknown:0,first:null,last:null,valid:0,sideOrder:shuffled([false,false,false,true,true,true]),pairs:selectChoicePairs(),neutral:[],center:null,orientation:-1,quality:0,trackingMode:S.model?"calibrated":"relative",returnPhase:S.phase};
  stage("choice");setVisible(els.estimate,false);setVisible(els.metrics,false);setVisible(els.metricExtra,false);setVisible(els.centerInfo,false);
  els.choiceOverlay.hidden=false;if(S.choice.trackingMode==="relative")choiceNeutral();else choiceRound();
 }
@@ -489,16 +533,16 @@ function choiceNeutral(){
 function choiceRound(){
  const c=S.choice;if(!c)return;
  c.phase="observe";c.started=performance.now();c.samples=[0,0];c.unknown=0;c.first=null;c.last=null;c.lastRegion=null;c.valid=0;c.observed=0;c.frames=0;
- const repeat=c.round>=choiceSets.length;
- const pair=choiceSets[c.round%choiceSets.length],reversed=repeat?!c.sideOrder[c.round%choiceSets.length]:c.sideOrder[c.round];
- c.options=reversed?[pair[1],pair[0]]:pair;
+ const repeat=c.round>=c.pairs.length;
+ const item=c.pairs[c.round%c.pairs.length],pair=[item.a,item.b],reversed=repeat?!c.sideOrder[c.round%c.pairs.length]:c.sideOrder[c.round];
+ c.options=reversed?[pair[1],pair[0]]:pair;c.currentItem=item;
  els.choiceOverlay.innerHTML="";
- const title=document.createElement("div");title.className="choicePrompt";title.textContent=repeat?"Would you make the same choice?":"Which one feels more like you?";
- const hint=document.createElement("div");hint.className="choiceHint";hint.textContent=(repeat?"Second look":"First look")+" · "+(c.round%choiceSets.length+1)+" / "+choiceSets.length+" · Observe for 6 seconds";
+ const title=document.createElement("div");title.className="choicePrompt";title.textContent=repeat?"Second look: "+item.q:item.q;
+ const hint=document.createElement("div");hint.className="choiceHint";hint.textContent=(repeat?"Second look":"First look")+" · "+(c.round%c.pairs.length+1)+" / "+c.pairs.length+" · Observe for 6 seconds";
  const cards=document.createElement("div");cards.className="choiceCards";
  c.options.forEach((o,i)=>{const card=document.createElement("div");card.className="choiceCard";card.style.background=o[2];card.innerHTML='<span class="choiceIcon"></span><span class="choiceLabel"></span>';card.querySelector(".choiceIcon").textContent=o[0];card.querySelector(".choiceLabel").textContent=o[1];cards.append(card);});
  els.choiceOverlay.append(title,hint,cards);c.hint=hint;c.cards=cards;
- setIndicator(true,(repeat?"Second look":"First look")+" · "+(c.round%choiceSets.length+1)+"/6");
+ setIndicator(true,(repeat?"Second look":"First look")+" · "+(c.round%c.pairs.length+1)+"/6");
 }
 function tickChoice(now,fresh){
  const c=S.choice;if(!c)return;
@@ -509,7 +553,7 @@ function tickChoice(now,fresh){
  }
  if(c.phase!=="observe")return;
  const elapsed=now-c.started;
- c.hint.textContent=(c.round>=choiceSets.length?"Second look":"First look")+" · "+(c.round%choiceSets.length+1)+"/6 · "+Math.max(0,Math.ceil((6000-elapsed)/1000))+"s";
+ c.hint.textContent=(c.round>=c.pairs.length?"Second look":"First look")+" · "+(c.round%c.pairs.length+1)+"/6 · "+Math.max(0,Math.ceil((6000-elapsed)/1000))+"s";
  if(fresh&&S.feature&&now-S.lastSeen<450){
   c.frames++;
   let hit=-1;
@@ -540,7 +584,7 @@ function tickChoice(now,fresh){
 function chooseChoice(i){
  const c=S.choice;if(!c||c.phase!=="choose")return;
  const total=c.samples[0]+c.samples[1],more=total>0?(c.samples[0]===c.samples[1]?null:(c.samples[0]>c.samples[1]?0:1)):null;
- const row={round:c.round+1,trackingMode:c.trackingMode,coverage:Math.round(c.valid/6000*100),pass:c.round>=choiceSets.length?2:1,pairId:c.round%choiceSets.length,options:c.options.map(o=>o[1]),chosen:i,chosenLabel:c.options[i][1],lookedLongerAt:more===null?null:c.options[more][1],dwellMs:c.samples.map(Math.round),unclassifiedMs:Math.round(c.unknown),firstRegion:c.first,lastRegion:c.lastRegion,agreement:more===null?null:more===i,validMs:Math.round(c.valid),confidence:null};
+ const row={round:c.round+1,prompt:c.currentItem.q,difficulty:c.currentItem.tier,stimulusId:c.currentItem.id,trackingMode:c.trackingMode,coverage:Math.round(c.valid/6000*100),pass:c.round>=c.pairs.length?2:1,pairId:c.round%c.pairs.length,options:c.options.map(o=>o[1]),chosen:i,chosenLabel:c.options[i][1],lookedLongerAt:more===null?null:c.options[more][1],dwellMs:c.samples.map(Math.round),unclassifiedMs:Math.round(c.unknown),firstRegion:c.first,lastRegion:c.lastRegion,agreement:more===null?null:more===i,validMs:Math.round(c.valid),confidence:null};
  c.rows.push(row);c.phase="confidence";
  els.choiceOverlay.innerHTML="";
  const ch=document.createElement("div");ch.className="choicePrompt";ch.textContent="How sure are you?";
@@ -554,7 +598,7 @@ function revealChoice(row,i,more,total){
  els.choiceOverlay.innerHTML="";
  const h=document.createElement("div");h.className="choicePrompt";h.textContent=total<1800?"Not enough reliable gaze data":more===null?"Your gaze was evenly split":more===i?"Your gaze and choice matched":"Your gaze and choice differed";
  const d=document.createElement("div");d.className="choiceResult";d.textContent="You chose "+row.chosenLabel+" ("+["","not sure","somewhat sure","very sure"][row.confidence]+"). Estimated viewing time: "+row.options[0]+" "+(row.dwellMs[0]/1000).toFixed(1)+"s · "+row.options[1]+" "+(row.dwellMs[1]/1000).toFixed(1)+"s. First seen: "+(row.firstRegion===null?"unclassified":row.options[row.firstRegion])+". Last seen: "+(row.lastRegion===null?"unclassified":row.options[row.lastRegion])+". This is not a measure of unconscious preference.";
- const next=document.createElement("button");next.className="primary";next.textContent=c.round===choiceSets.length*2-1?"See my results":c.round===choiceSets.length-1?"Start second look":"Next round";next.addEventListener("click",()=>{c.round++;if(c.round===choiceSets.length){showChoiceBreak();}else if(c.round<choiceSets.length*2)choiceRound();else finishChoice();});
+ const next=document.createElement("button");next.className="primary";next.textContent=c.round===c.pairs.length*2-1?"See my results":c.round===c.pairs.length-1?"Start second look":"Next round";next.addEventListener("click",()=>{c.round++;if(c.round===c.pairs.length){showChoiceBreak();}else if(c.round<c.pairs.length*2)choiceRound();else finishChoice();});
  if(total<1800){h.textContent="Not enough gaze data";d.textContent="Only "+row.coverage+"% of the observation was classified. Your choice was saved, but we cannot compare attention reliably. Hold the phone steady and try looking distinctly left and right.";}
  const chart=document.createElement("div");chart.style.cssText="width:min(100%,420px);display:grid;gap:9px;text-align:left";
  row.options.forEach((label,k)=>{
@@ -570,7 +614,7 @@ function revealChoice(row,i,more,total){
 function showChoiceBreak(){
  const c=S.choice;if(!c)return;c.phase="break";els.choiceOverlay.innerHTML="";
  const h=document.createElement("div");h.className="choicePrompt";h.textContent="Second Look";
- const d=document.createElement("div");d.className="choiceResult";d.textContent="You will see the same six pairs again, with left and right positions switched. Your choice may stay the same or change. There is no right answer.";
+ const d=document.createElement("div");d.className="choiceResult";d.textContent="You will see the same six questions again, with left and right positions switched. This repetition is intentional: it lets you compare your choices. There is no right answer.";
  const b=document.createElement("button");b.className="primary";b.textContent="Begin second look";b.addEventListener("click",choiceRound);
  els.choiceOverlay.append(h,d,b);setIndicator(true,"Second look · ready");
 }
