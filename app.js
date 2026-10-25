@@ -14,7 +14,7 @@ const validation = [
 ];
 const S = { phase:"idle", stream:null, landmarker:null, raf:0, lastVideoTime:-1,
             feature:null, lastSeen:0, phaseStart:0, stepStart:0, step:0, samples:[],
-            train:[], test:[], model:null, result:null, lastInfer:0, issue:"",alignmentOK:false,alignedSince:0,headBaseline:null,headNow:null,game:null,gameLast:0,gameGaze:null,gameLastSeen:0,paintMode:null,paintPrev:null,paintSmooth:null,paintCenter:null,paintRange:null,paintHue:0,paintLastSeen:0 };
+            train:[], test:[], model:null, result:null, lastInfer:0, issue:"",alignmentOK:false,alignedSince:0,headBaseline:null,headNow:null,game:null,gameLast:0,gameGaze:null,gameLastSeen:0,paintMode:null,paintPrev:null,paintSmooth:null,paintCenter:null,paintRange:null,paintHue:0,paintLastSeen:0,choice:null };
 const clamp = (x,a,b) => Math.max(a,Math.min(b,x));
 function setMessage(message){els.message.textContent=message;}
 function setIndicator(ok,message,warn=false){els.led.className="led"+(ok?(warn?" warn":" on"):"");els.stateText.textContent=message;}
@@ -25,6 +25,8 @@ function controls(){
   setVisible(els.restart,S.phase==="results" || S.phase==="ready");
   setVisible(els.export,S.phase==="results"||S.phase==="game");
   setVisible(els.play,S.phase==="results");
+  if(els.choiceStart)setVisible(els.choiceStart,S.phase==="results");
+  if(els.choiceEnd)setVisible(els.choiceEnd,S.phase==="choice");
   setVisible(els.endGame,S.phase==="game");
   setVisible(els.instantPaint,S.phase==="ready"||S.phase==="results");
   setVisible(els.calibratedPaint,S.phase==="results");
@@ -281,6 +283,7 @@ function loop(now){
       }
     }
     if(S.phase==="paint"){tickPaint(fresh);}
+    if(S.phase==="choice"){tickChoice(now,fresh);}
     if(S.phase==="game"){tickGame(now,fresh);}
     if(S.phase==="results" && found && S.model){
       const q=S.model.predict(S.feature);place(els.estimate,clamp(q[0],.025,.975),clamp(q[1],.025,.975));
@@ -419,7 +422,7 @@ function restart(){
 }
 function stopCamera(){
   releaseCamera();S.feature=null;S.model=null;S.result=null;S.headBaseline=null;S.alignmentOK=false;S.alignedSince=0;
-  els.board.classList.remove("paintMode");stage("idle");setVisible(els.target,false);setVisible(els.estimate,false);setVisible(els.metrics,false);setVisible(els.metricExtra,false);setVisible(els.gameHoop,false);setVisible(els.gameBall,false);setVisible(els.paintCanvas,false);setVisible(els.paintCursor,false);
+  els.board.classList.remove("paintMode");if(els.choiceOverlay)els.choiceOverlay.hidden=true;S.choice=null;stage("idle");setVisible(els.target,false);setVisible(els.estimate,false);setVisible(els.metrics,false);setVisible(els.metricExtra,false);setVisible(els.gameHoop,false);setVisible(els.gameBall,false);setVisible(els.paintCanvas,false);setVisible(els.paintCursor,false);
   setIndicator(false,"Camera off");els.counter.textContent="Ready";
   announce("Control with your eyes.","Allow camera access to begin. Processing stays on your device.");
   setMessage("Camera stopped. No images were saved.");
@@ -442,6 +445,107 @@ els.instantPaint.addEventListener("click",()=>beginPaint("instant"));
 els.calibratedPaint.addEventListener("click",()=>beginPaint("calibrated"));
 els.clearPaint.addEventListener("click",clearPaint);
 els.endPaint.addEventListener("click",endPaint);
+// Your Eyes vs Your Choice — gaze is observed before the participant explicitly chooses.
+// Do not infer unconscious preferences from dwell; this is a within-task exploratory comparison.
+const choiceSets=[
+ [["🌙","Midnight","#22253d"],["☀️","Daylight","#f7b850"]],
+ [["🌊","Ocean","#247cbd"],["🏔️","Mountain","#64748b"]],
+ [["🎨","Create","#e78eac"],["🧭","Explore","#55a99c"]],
+ [["🌆","City","#805caa"],["🌿","Nature","#5f9b6d"]],
+ [["✨","Surprise","#b58ce2"],["🕯️","Familiar","#d5a567"]],
+ [["🎵","Rhythm","#df7391"],["🧩","Puzzle","#4c9baf"]]
+];
+function setupChoice(){
+ const css=document.createElement("style");css.textContent=`
+ .choiceOverlay{position:absolute;inset:0;background:#fff;z-index:6;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:18px;gap:12px}
+ .choiceOverlay[hidden]{display:none!important}
+ .choiceCards{display:grid;grid-template-columns:1fr 1fr;gap:12px;width:100%;max-width:540px}
+ .choiceCard{min-height:170px;border-radius:23px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:13px;color:white;font-size:17px;font-weight:650;box-shadow:0 7px 24px #00000010}
+ .choiceCard .choiceIcon{font-size:48px}
+ .choiceOverlay .choicePrompt{font-size:19px;font-weight:700;text-align:center;letter-spacing:-.03em}
+ .choiceOverlay .choiceHint{font-size:12px;color:#74747a;text-align:center}
+ .choiceOverlay .choiceResult{font-size:13px;line-height:1.65;max-width:500px;text-align:center}
+ @media(max-width:520px){.choiceCard{min-height:145px}.choiceCard .choiceIcon{font-size:38px}}
+ `;document.head.append(css);
+ els.choiceStart=document.createElement("button");els.choiceStart.textContent="Your Eyes vs Your Choice";els.choiceStart.className="primary";els.choiceStart.hidden=true;els.play.after(els.choiceStart);
+ els.choiceEnd=document.createElement("button");els.choiceEnd.textContent="End experiment";els.choiceEnd.hidden=true;els.choiceStart.after(els.choiceEnd);
+ els.choiceOverlay=document.createElement("div");els.choiceOverlay.className="choiceOverlay";els.choiceOverlay.hidden=true;els.board.append(els.choiceOverlay);
+ els.choiceStart.addEventListener("click",startChoice);
+ els.choiceEnd.addEventListener("click",endChoice);
+}
+function startChoice(){
+ if(S.phase!=="results"||!S.model)return;
+ S.choice={round:0,rows:[],phase:"observe",started:performance.now(),samples:[0,0],unknown:0,first:null,last:null,valid:0};
+ stage("choice");setVisible(els.estimate,false);setVisible(els.metrics,false);setVisible(els.metricExtra,false);setVisible(els.centerInfo,false);
+ els.choiceOverlay.hidden=false;choiceRound();
+}
+function choiceRound(){
+ const c=S.choice;if(!c)return;
+ c.phase="observe";c.started=performance.now();c.samples=[0,0];c.unknown=0;c.first=null;c.last=null;c.valid=0;
+ const pair=choiceSets[c.round],reversed=c.round%2===1;
+ c.options=reversed?[pair[1],pair[0]]:pair;
+ els.choiceOverlay.innerHTML="";
+ const title=document.createElement("div");title.className="choicePrompt";title.textContent="Which one feels more like you?";
+ const hint=document.createElement("div");hint.className="choiceHint";hint.textContent="Round "+(c.round+1)+" / "+choiceSets.length+" · Just look for 6 seconds";
+ const cards=document.createElement("div");cards.className="choiceCards";
+ c.options.forEach((o,i)=>{const card=document.createElement("div");card.className="choiceCard";card.style.background=o[2];card.innerHTML='<span class="choiceIcon"></span><span class="choiceLabel"></span>';card.querySelector(".choiceIcon").textContent=o[0];card.querySelector(".choiceLabel").textContent=o[1];cards.append(card);});
+ els.choiceOverlay.append(title,hint,cards);c.hint=hint;c.cards=cards;
+ setIndicator(true,"Observing gaze · "+(c.round+1)+"/6");
+}
+function tickChoice(now,fresh){
+ const c=S.choice;if(!c||c.phase!=="observe")return;
+ const elapsed=now-c.started;
+ c.hint.textContent="Round "+(c.round+1)+" / 6 · "+Math.max(0,Math.ceil((6000-elapsed)/1000))+"s";
+ if(fresh&&S.feature){
+  const q=S.model.predict(S.feature);
+  if(q.every(Number.isFinite)){
+   // The cards occupy the central part of the board; reject estimates outside card regions.
+   const rect=els.board.getBoundingClientRect();
+   const boxes=[...c.cards.children].map(el=>el.getBoundingClientRect());
+   const px=rect.left+q[0]*rect.width,py=rect.top+q[1]*rect.height;
+   const hit=boxes.findIndex(b=>px>=b.left&&px<=b.right&&py>=b.top&&py<=b.bottom);
+   const dt=c.last?Math.min(250,now-c.last):110;c.last=now;
+   if(hit>=0){c.samples[hit]+=dt;c.valid+=dt;if(c.first===null)c.first=hit;}
+   else c.unknown+=dt;
+  }
+ }
+ if(elapsed>=6000){
+  c.phase="choose";c.cards.querySelectorAll(".choiceCard").forEach((card,i)=>{card.style.cursor="pointer";card.setAttribute("role","button");card.tabIndex=0;card.addEventListener("click",()=>chooseChoice(i));card.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" ")chooseChoice(i);});});
+  c.hint.textContent="Now tap your actual choice. Looking did not select it.";
+  setIndicator(true,"Make your choice");
+ }
+}
+function chooseChoice(i){
+ const c=S.choice;if(!c||c.phase!=="choose")return;
+ const total=c.samples[0]+c.samples[1],more=total>0?(c.samples[0]===c.samples[1]?null:(c.samples[0]>c.samples[1]?0:1)):null;
+ const row={round:c.round+1,options:c.options.map(o=>o[1]),chosen:i,chosenLabel:c.options[i][1],lookedLongerAt:more===null?null:c.options[more][1],dwellMs:c.samples.map(Math.round),unclassifiedMs:Math.round(c.unknown),firstRegion:c.first,agreement:more===null?null:more===i,validMs:Math.round(c.valid)};
+ c.rows.push(row);c.phase="reveal";
+ els.choiceOverlay.innerHTML="";
+ const h=document.createElement("div");h.className="choicePrompt";h.textContent=total<900?"Not enough reliable gaze data":more===null?"Your gaze was evenly split":more===i?"Your gaze and choice matched":"Your gaze and choice differed";
+ const d=document.createElement("div");d.className="choiceResult";d.textContent="You chose "+row.chosenLabel+". Estimated viewing time: "+row.options[0]+" "+(row.dwellMs[0]/1000).toFixed(1)+"s · "+row.options[1]+" "+(row.dwellMs[1]/1000).toFixed(1)+"s. This describes this round, not your unconscious preferences.";
+ const next=document.createElement("button");next.className="primary";next.textContent=c.round===choiceSets.length-1?"See my results":"Next round";next.addEventListener("click",()=>{c.round++;if(c.round<choiceSets.length)choiceRound();else finishChoice();});
+ els.choiceOverlay.append(h,d,next);
+}
+function finishChoice(){
+ const c=S.choice;if(!c)return;
+ const usable=c.rows.filter(r=>r.validMs>=900&&r.agreement!==null),matches=usable.filter(r=>r.agreement).length;
+ els.choiceOverlay.innerHTML="";
+ const h=document.createElement("div");h.className="choicePrompt";h.textContent="Your Eyes vs Your Choice";
+ const d=document.createElement("div");d.className="choiceResult";
+ d.textContent=usable.length?"Your gaze favored your final choice in "+matches+" of "+usable.length+" measurable rounds. "+(c.rows.length-usable.length)+" rounds had insufficient or inconclusive gaze data.":"Not enough reliable gaze data to compare choices. Try recalibrating.";
+ const p=document.createElement("div");p.className="choiceHint";p.textContent="This is an exploratory visual-attention game, not a personality or subconscious preference test.";
+ const b=document.createElement("button");b.className="primary";b.textContent="Finish";b.addEventListener("click",endChoice);
+ els.choiceOverlay.append(h,d,p,b);
+ if(S.result)S.result.choiceExperiment={name:"Your Eyes vs Your Choice",rounds:c.rows,matchingRounds:matches,usableRounds:usable.length,disclaimer:"Exploratory, non-clinical. Gaze estimates are not unconscious preference measures."};
+ c.phase="complete";
+}
+function endChoice(){
+ if(S.phase!=="choice")return;
+ els.choiceOverlay.hidden=true;S.choice=null;stage("results");setVisible(els.metrics,true);setVisible(els.metricExtra,true);
+ announce("Experiment complete","Compare what you looked at with what you chose.");
+ setMessage("Your Eyes vs Your Choice · experimental, not a personality assessment.");
+}
+setupChoice();
 window.addEventListener("pagehide",releaseCamera);
 window.addEventListener("orientationchange",()=>{if(S.phase==="calibration"||S.phase==="validation"){stage("ready");setVisible(els.target,false);announce("Screen orientation changed.","Calibration ölçümleri iptal edildi. Yeniden deneyebilirsin.");setMessage("Screen orientation changed; restart the test.");}});
 controls();
