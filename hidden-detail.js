@@ -170,10 +170,10 @@ function runEyeMovementTest(){
   dot.style.left=step.x*100+"%";dot.style.top=step.y*100+"%";
   status.textContent="Target "+(index+1)+" / "+steps.length+" · "+step.name+" · "+bucket.length+" samples";
   const f=feature(eye.latest,mode);
-  if(now-started>350&&f&&now-eye.latest.t<400)bucket.push({f,t:now,head:eye.latest.head});
+  if(now-started>350&&f&&now-eye.latest.t<400)bucket.push({f,t:now,head:eye.latest.head,iris:mode==="right"?eye.latest.right:eye.latest.left});
   if(now-started>=1600){
    const median=k=>{const values=bucket.map(p=>p.f[k]).sort((a,b)=>a-b);return values.length?values[Math.floor(values.length/2)]:null;};
-   readings.push({name:step.name,x:median(0),y:median(1),headX:median(2),headY:median(3),samples:bucket.length});
+   readings.push({name:step.name,x:median(0),y:median(1),headX:median(2),headY:median(3),samples:bucket.length,rawX:bucket.length?bucket[Math.floor(bucket.length/2)].iris?.rawX:null,rawY:bucket.length?bucket[Math.floor(bucket.length/2)].iris?.rawY:null,eyeHeight:bucket.length?bucket[Math.floor(bucket.length/2)].iris?.eyeHeight:null});
    index++;bucket=[];started=now;
   }
  },100);
@@ -181,20 +181,21 @@ function runEyeMovementTest(){
   const [center,left,right,center2,up,down,center3]=readings;
   const dx=left&&right&&left.x!==null&&right.x!==null?right.x-left.x:null;
   const dy=up&&down&&up.y!==null&&down.y!==null?down.y-up.y:null;
-  const horizontal=dx===null?"unavailable":Math.abs(dx)<.015?"weak":dx>0?"positive":"negative";
-  const vertical=dy===null?"unavailable":Math.abs(dy)<.015?"weak":dy>0?"positive":"negative";
+  const horizontal=dx===null?"unavailable":Math.abs(dx)<.04?"weak":dx>0?"positive":"negative";
+  const vertical=dy===null?"unavailable":Math.abs(dy)<.06?"weak":dy>0?"positive":"negative";
   const centers=[center,center2,center3].filter(p=>p.x!==null&&p.y!==null);
   const drift=centers.length>=2?Math.hypot(centers[centers.length-1].x-centers[0].x,centers[centers.length-1].y-centers[0].y):null;
   const headDrift=centers.length>=2?Math.hypot(centers[centers.length-1].headX-centers[0].headX,centers[centers.length-1].headY-centers[0].headY):null;
   const coverage=readings.reduce((a,p)=>a+p.samples,0);
-  eye.diagnostic={eyeMode:mode,readings,horizontal,vertical,centerDrift:drift,headDrift,sampleCount:coverage};
+  eye.diagnostic={version:"single-eye-v2-eyelid-normalized",eyeMode:mode,readings,horizontal,vertical,horizontalDelta:dx,verticalDelta:dy,centerDrift:drift,headDrift,sampleCount:coverage};
   body.replaceChildren(el("div","hd-kicker","EYE SIGNAL / RESULTS"),el("h2","hd-title","Movement signal report."));
   const lines=[
    "Horizontal iris signal: "+horizontal+(dx===null?"":" (Δ "+dx.toFixed(3)+")"),
    "Vertical iris signal: "+vertical+(dy===null?"":" (Δ "+dy.toFixed(3)+")"),
    "Center repeatability: "+(drift===null?"unavailable":drift.toFixed(3)),
    "Head position change: "+(headDrift===null?"unavailable":headDrift.toFixed(3)),
-   "Usable samples: "+coverage
+   "Usable samples: "+coverage,
+   "Iris opening (center): "+(center?.eyeHeight==null?"unavailable":center.eyeHeight.toFixed(4))
   ];
   lines.forEach(line=>body.append(el("p","hd-eye-status",line)));
   body.append(el("p","hd-note","Positive/negative describes camera coordinate direction, not whether screen gaze is accurate. Weak signals, head movement and center drift can explain failed calibration. This test does not validate gaze position."));
@@ -272,11 +273,20 @@ function collectEyes(){
   const lm=eye.model.detectForVideo(eye.video,now).faceLandmarks?.[0];
   let x=null,y=null,head=null,left=null,right=null;
   if(lm&&lm.length>=478){
-   const iris=(p,a,b)=>{
-    const A=lm[a],B=lm[b],P=lm[p],dx=B.x-A.x,dy=B.y-A.y,d=dx*dx+dy*dy;
-    return d>.0002?{x:((P.x-(A.x+B.x)/2)*dx+(P.y-(A.y+B.y)/2)*dy)/d,y:((P.y-(A.y+B.y)/2)*dx-(P.x-(A.x+B.x)/2)*dy)/d}:null;
+   const iris=(p,outer,inner,upper,lower)=>{
+    const A=lm[outer],B=lm[inner],P=lm[p],U=lm[upper],D=lm[lower];
+    if(![A,B,P,U,D].every(Boolean))return null;
+    const dx=B.x-A.x,dy=B.y-A.y,w=Math.hypot(dx,dy);
+    if(w<.025)return null;
+    const ux=dx/w,uy=dy/w,vx=-uy,vy=ux;
+    const midX=(A.x+B.x)/2,midY=(A.y+B.y)/2;
+    const eyeHeight=Math.abs((D.x-U.x)*vx+(D.y-U.y)*vy);
+    const irisX=((P.x-midX)*ux+(P.y-midY)*uy)/w;
+    const irisY=((P.x-midX)*vx+(P.y-midY)*vy)/Math.max(eyeHeight,.008);
+    return Number.isFinite(irisX+irisY)?{x:irisX,y:irisY,rawX:P.x,rawY:P.y,eyeWidth:w,eyeHeight}:null;
    };
-   const a=iris(468,33,133),b=iris(473,362,263);
+   // MediaPipe iris centers: 468 (eye with corners 33/133), 473 (362/263).
+   const a=iris(468,33,133,159,145),b=iris(473,362,263,386,374);
    left=a;right=b;
    if(a&&b&&Number.isFinite(a.x+b.x)&&Number.isFinite(a.y+b.y)){x=(a.x+b.x)/2;y=(a.y+b.y)/2;}
    if((a&&Number.isFinite(a.x+a.y))||(b&&Number.isFinite(b.x+b.y)))eye.lastDetected=now;
