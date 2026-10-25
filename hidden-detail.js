@@ -155,14 +155,14 @@ function eyeCheck(){
  body.append(kicker,title,desc,frame,status,next,retry);
  let valid=0,attempts=0;
  eyeCheckTimer=setInterval(()=>{
-  if(!eye){clearInterval(checkTimer);return;}
+  if(!eye){clearInterval(eyeCheckTimer);return;}
   attempts++;
   const good=eye.lastDetected&&performance.now()-eye.lastDetected<750;
   valid=good?valid+1:0;
   oval.classList.toggle("good",!!good);
   status.textContent=good?"Both irises detected · "+Math.min(100,Math.round(valid/6*100))+"% signal check":"Face or iris landmarks not detected. Improve lighting and face the camera.";
-  if(valid>=6){next.disabled=false;status.textContent="Eye signal detected. Ready for the gallery.";clearInterval(checkTimer);}
-  if(attempts>90){clearInterval(checkTimer);status.textContent="Signal check timed out. You can continue without eye tracking.";}
+  if(valid>=6){next.disabled=false;status.textContent="Eye signal detected. Ready for the gallery.";clearInterval(eyeCheckTimer);}
+  if(attempts>90){clearInterval(eyeCheckTimer);status.textContent="Signal check timed out. You can continue without eye tracking.";}
  },180);
 }
 
@@ -202,7 +202,7 @@ function collectEyes(){
     return d>.0002?{x:((P.x-(A.x+B.x)/2)*dx+(P.y-(A.y+B.y)/2)*dy)/d,y:((P.y-(A.y+B.y)/2)*dx-(P.x-(A.x+B.x)/2)*dy)/d}:null;
    };
    const a=iris(468,33,133),b=iris(473,362,263);
-   if(a!==null&&b!==null&&Number.isFinite(a+b)){x=Math.round((a.x+b.x)*5000)/10000;y=Math.round((a.y+b.y)*5000)/10000;eye.lastDetected=now;}
+   if(a!==null&&b!==null&&Number.isFinite(a.x+b.x)&&Number.isFinite(a.y+b.y)){x=Math.round((a.x+b.x)*5000)/10000;y=Math.round((a.y+b.y)*5000)/10000;eye.lastDetected=now;}
    head=Math.round((lm[33].x+lm[263].x)*5000)/10000;
   }
   eye.latest=x===null?null:{x,y,t:now};if(eye.start)eye.samples.push({t:Math.round(now-eye.start),x,y,head});
