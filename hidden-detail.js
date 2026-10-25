@@ -25,6 +25,7 @@ const palette=["#171717","#343434","#5b5b5b","#7c7c7c","#9d9d9d","#b6b6b6","#484
 let session=null,raf=0;
 let eye=null;
 let eyeCheckTimer=0;
+let selectedEyeMode="left";
 let galleryToken=0;
 let calibrationTimer=0;
 const realArtworks=[
@@ -72,9 +73,11 @@ function solveN(A,b){
  }
  return m.map(r=>r[n]);
 }
-function feature(frame){
- return frame&&Number.isFinite(frame.x)&&Number.isFinite(frame.y)&&frame.head?
- [frame.x,frame.y,frame.head.cx,frame.head.cy]:null;
+function feature(frame,mode=selectedEyeMode){
+ if(!frame?.head)return null;
+ const v=mode==="left"?frame.left:mode==="right"?frame.right:{x:frame.x,y:frame.y};
+ return v&&[v.x,v.y,frame.head.cx,frame.head.cy].every(Number.isFinite)?
+ [v.x,v.y,frame.head.cx,frame.head.cy]:null;
 }
 function fitGaze(points){
  const n=5,A=Array.from({length:n},()=>Array(n).fill(0)),bx=Array(n).fill(0),by=Array(n).fill(0);
@@ -95,6 +98,7 @@ function runCalibration(){
  const validation=[[.28,.32],[.74,.3],[.47,.67],[.26,.73],[.75,.74]];
  const steps=[...training,...validation];
  const samples=[],errors=[];
+ const calibrationMode=selectedEyeMode;
  let index=0;
  body.replaceChildren();
  const label=el("div","hd-kicker","EYE TRACKING / CALIBRATION");
@@ -115,7 +119,7 @@ function runCalibration(){
   const validationMode=index>=training.length;
   label.textContent=validationMode?"INDEPENDENT VALIDATION":"9-POINT CALIBRATION";
   progress.textContent=(validationMode?"Validation "+(index-8)+" / 5":"Calibration "+(index+1)+" / 9");
-  if(elapsed>420&&eye.latest&&now-eye.latest.t<450){const f=feature(eye.latest);if(f)bucket.push(f);}
+  if(elapsed>420&&eye.latest&&now-eye.latest.t<450){const f=feature(eye.latest,calibrationMode);if(f)bucket.push(f);}
   if(elapsed>=1900){
    if(bucket.length>=5){
     const f=[0,1,2,3].map(j=>{const a=bucket.map(p=>p[j]).sort((a,b)=>a-b);return a[Math.floor(a.length/2)];});
@@ -128,6 +132,7 @@ function runCalibration(){
  calibrationTimer=setInterval(step,110);step();
  function finish(){
   const model=samples.length>=7?fitGaze(samples):null;
+  if(model)model.eyeMode=calibrationMode;
   const distances=errors.map(p=>{const q=p.f&&model?predictGaze(model,p.f):null;return q?Math.hypot(q.x-p.p[0],q.y-p.p[1])/Math.SQRT2*100:null;});
   const valid=distances.filter(Number.isFinite).sort((a,b)=>a-b);
   const median=valid.length?valid[Math.floor(valid.length/2)]:null;
@@ -153,17 +158,25 @@ function eyeCheck(){
  const preview=eye.video;preview.className="hd-check-video";frame.append(preview);
  const oval=el("div","hd-check-oval");frame.append(oval);
  const status=el("div","hd-eye-status","Checking face and iris landmarks…");
+ const picker=el("div","hd-eye-mode");
+ const heading=el("p","hd-note","Select which eye signal to calibrate. Keep both eyes open.");
+ const options=[["left","Left eye"],["right","Right eye"],["both","Both eyes"]];
+ options.forEach(([value,label])=>{
+  const b=button(label,()=>{selectedEyeMode=value;eye.mode=value;picker.querySelectorAll("button").forEach(n=>n.classList.toggle("hd-mode-selected",n===b));valid=0;next.disabled=true;});
+  b.classList.toggle("hd-mode-selected",selectedEyeMode===value);picker.append(b);
+ });
+ eye.mode=selectedEyeMode;
  const next=button("Calibrate gaze (9 points)",()=>{clearInterval(eyeCheckTimer);runCalibration();});next.disabled=true;
  const retry=button("Continue without eye data",()=>{clearInterval(eyeCheckTimer);stopEyes();startGame();},true);
- body.append(kicker,title,desc,frame,status,next,retry);
+ body.append(kicker,title,desc,frame,heading,picker,status,next,retry);
  let valid=0,attempts=0;
  eyeCheckTimer=setInterval(()=>{
   if(!eye){clearInterval(eyeCheckTimer);return;}
   attempts++;
-  const good=eye.lastDetected&&performance.now()-eye.lastDetected<750;
+  const good=eye.lastDetected&&performance.now()-eye.lastDetected<750&&!!feature(eye.latest,selectedEyeMode);
   valid=good?valid+1:0;
   oval.classList.toggle("good",!!good);
-  status.textContent=good?"Both irises detected · "+Math.min(100,Math.round(valid/6*100))+"% signal check":"Face or iris landmarks not detected. Improve lighting and face the camera.";
+  status.textContent=good?"Selected eye signal detected · "+Math.min(100,Math.round(valid/6*100))+"% signal check":"Face or iris landmarks not detected. Improve lighting and face the camera.";
   if(valid>=6){next.disabled=false;status.textContent="Eye signal detected. Ready for the gallery.";clearInterval(eyeCheckTimer);}
   if(attempts>90){clearInterval(eyeCheckTimer);status.textContent="Signal check timed out. You can continue without eye tracking.";}
  },180);
@@ -198,17 +211,18 @@ function collectEyes(){
  const now=performance.now();
  try{
   const lm=eye.model.detectForVideo(eye.video,now).faceLandmarks?.[0];
-  let x=null,y=null,head=null;
+  let x=null,y=null,head=null,left=null,right=null;
   if(lm&&lm.length>=478){
    const iris=(p,a,b)=>{
     const A=lm[a],B=lm[b],P=lm[p],dx=B.x-A.x,dy=B.y-A.y,d=dx*dx+dy*dy;
     return d>.0002?{x:((P.x-(A.x+B.x)/2)*dx+(P.y-(A.y+B.y)/2)*dy)/d,y:((P.y-(A.y+B.y)/2)*dx-(P.x-(A.x+B.x)/2)*dy)/d}:null;
    };
    const a=iris(468,33,133),b=iris(473,362,263);
+   left=a;right=b;
    if(a!==null&&b!==null&&Number.isFinite(a.x+b.x)&&Number.isFinite(a.y+b.y)){x=Math.round((a.x+b.x)*5000)/10000;y=Math.round((a.y+b.y)*5000)/10000;eye.lastDetected=now;}
    head={cx:(lm[33].x+lm[263].x)/2,cy:(lm[33].y+lm[263].y)/2,width:Math.hypot(lm[263].x-lm[33].x,lm[263].y-lm[33].y),roll:Math.atan2(lm[263].y-lm[33].y,lm[263].x-lm[33].x)};
   }
-  eye.latest=x===null?null:{x,y,head,t:now};if(eye.start)eye.samples.push({t:Math.round(now-eye.start),x,y,head});
+  eye.latest=x===null?null:{x,y,left,right,head,t:now};if(eye.start)eye.samples.push({t:Math.round(now-eye.start),x,y,left,right,head});
  }catch(_){}
 }
 function beginEyeRound(){if(eye){eye.samples=[];eye.start=performance.now();}}
@@ -219,15 +233,15 @@ function endEyeRound(record){
  const gaps=[];for(let i=1;i<valid.length;i++)gaps.push(valid[i].t-valid[i-1].t);
  const xs=valid.map(p=>p.x),hs=valid.map(p=>p.head?.cx).filter(Number.isFinite);
  record.eyeTracking={
-  status:valid.length>=10?"exploratory":"insufficient",
+  status:valid.length>=10?"exploratory":"insufficient",eyeMode:eye.mode||selectedEyeMode,
   sampleCount:data.length,validCount:valid.length,
   coveragePercent:data.length?Math.round(100*valid.length/data.length):0,
  approximateSampleRateHz:data.length>1?Math.round(1000*(data.length-1)/Math.max(1,data[data.length-1].t-data[0].t)*10)/10:null,
  longestValidSampleGapMs:gaps.length?Math.max(...gaps):null,
   horizontalSignalRange:xs.length?Math.max(...xs)-Math.min(...xs):null,
   headMovementRange:hs.length?Math.max(...hs)-Math.min(...hs):null,
-  samples:data.map(p=>{const gaze=eye.calibration?.passed&&p.x!==null&&p.y!==null?predictGaze(eye.calibration,feature(p)):null;const bounds=record.artworkBounds;const artwork=gaze&&bounds?{x:(gaze.x*innerWidth-bounds.left)/bounds.width,y:(gaze.y*innerHeight-bounds.top)/bounds.height}:null;return {t:p.t,x:p.x,y:p.y,gaze,artwork:artwork&&Number.isFinite(artwork.x+artwork.y)?{x:Math.round(artwork.x*10000)/10000,y:Math.round(artwork.y*10000)/10000}:null};}),
-  calibration:eye.calibration?{passed:eye.calibration.passed,validationMedianErrorPct:eye.calibration.validationMedianErrorPct,validationMaxErrorPct:eye.calibration.validationMaxErrorPct}:null,
+  samples:data.map(p=>{const gaze=eye.calibration?.passed&&p.x!==null&&p.y!==null?predictGaze(eye.calibration,feature(p,eye.calibration.eyeMode)):null;const bounds=record.artworkBounds;const artwork=gaze&&bounds?{x:(gaze.x*innerWidth-bounds.left)/bounds.width,y:(gaze.y*innerHeight-bounds.top)/bounds.height}:null;return {t:p.t,x:p.x,y:p.y,gaze,artwork:artwork&&Number.isFinite(artwork.x+artwork.y)?{x:Math.round(artwork.x*10000)/10000,y:Math.round(artwork.y*10000)/10000}:null};}),
+  calibration:eye.calibration?{eyeMode:eye.calibration.eyeMode,passed:eye.calibration.passed,validationMedianErrorPct:eye.calibration.validationMedianErrorPct,validationMaxErrorPct:eye.calibration.validationMaxErrorPct}:null,
   note:"Exploratory camera gaze estimate only when independently validated; not a clinical or reference-grade measurement."
  };
 }
@@ -385,7 +399,7 @@ function showResults(){
 }
 function exportData(){
  if(!session)return;
- const payload={experiment:"The Hidden Detail",version:"2.1-art-rotation-calibrated-gaze",sessionId:session.id,startedAt:new Date(session.started).toISOString(),mode:"touch-visual-search",results:session.results,disclaimer:"Non-clinical visual-search game. Not a validated diagnostic measure. Screen-position estimates are exported only after independent validation; no diagnostic interpretation."};
+ const payload={experiment:"The Hidden Detail",version:"2.3-monocular-comparison",sessionId:session.id,startedAt:new Date(session.started).toISOString(),mode:"touch-visual-search",results:session.results,disclaimer:"Non-clinical visual-search game. Not a validated diagnostic measure. Screen-position estimates are exported only after independent validation; no diagnostic interpretation."};
  const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
  const url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="irispectra-hidden-detail-"+session.id+".json";document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
