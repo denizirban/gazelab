@@ -27,7 +27,13 @@
     .metricExtra>div{border:1px solid #eeeef0;border-radius:14px;padding:12px;font-size:11px;color:#777}
     .metricExtra strong{display:block;font-size:19px;color:#171717;margin-top:4px}
     @media(max-width:520px){.metricExtra{gap:5px}.metricExtra>div{padding:9px}}
-.paintCanvas{position:absolute;inset:0;width:100%;height:100%;z-index:2;pointer-events:none}
+.paintCanvas{position:absolute;inset:0;width:100%;height:100%;z-index:2;pointer-events:none;background:#fff}
+.board.paintMode{background:#fff}
+.board.paintMode>.preview{position:absolute;inset:auto 14px 14px auto;width:104px;height:82px;opacity:1;z-index:5;border:2px solid #e9e9ee;border-radius:14px;box-shadow:0 3px 14px #00000016;pointer-events:none}
+.board.paintMode>.preview video{width:100%;height:100%;object-fit:cover}
+.board.paintMode::after{z-index:3;inset:8px;border-color:#f0f0f3}
+.board.paintMode .paintCursor{z-index:4}
+@media(max-width:699px){.board.paintMode>.preview{width:82px;height:66px;bottom:10px;right:10px}}
 .paintCursor{position:absolute;width:44px;height:44px;font-size:36px;line-height:44px;text-align:center;transform:translate(-50%,-50%);z-index:3;pointer-events:none}
     .intro .subtitle{max-width:460px}
     .workspace{box-shadow:none}
@@ -118,7 +124,7 @@
       <div class="panel"><div><h3>Live camera preview</h3><p>Keep your face in frame.</p></div><div class="preview"><video id="video" playsinline autoplay muted></video><small>On device</small></div></div>
     </div>
     <p class="notice">Experimental prototype. Estimates approximate gaze direction from facial and iris landmarks, not pupil diameter. Accuracy depends on lighting, head movement and device. Model files load online; camera frames stay on your device. Not for clinical or diagnostic use.</p>
-    <footer><span>GAZE LAB</span><span>V0.4 — WEB</span><span>ON-DEVICE PROCESSING</span></footer>
+    <footer><span>GAZE LAB</span><span>V0.6 — WEB</span><span>ON-DEVICE PROCESSING</span></footer>
   </main>
   <script src="./app.js" defer></script>
 </body>
