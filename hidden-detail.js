@@ -260,11 +260,15 @@ function eyeCameraMicroscope(){
  const canvas=document.createElement("canvas");canvas.width=720;canvas.height=360;
  canvas.style.cssText="display:block;width:100%;max-width:720px;aspect-ratio:2/1;border-radius:14px;background:#111;object-fit:contain";
  const info=el("p","hd-eye-status","Waiting for landmarks…");
+ const comparison=el("p","hd-note","Green: MediaPipe iris center. Magenta: independent dark-region candidate. Neither is validated gaze tracking.");
+ const motion=el("p","hd-eye-status","Waiting for live motion comparison…");
+ const motionHistory=[];let lastMotionT=0;
+
  const quality=el("p","hd-note","Use diffuse light facing your face. Never shine a flashlight directly into your eyes.");
  const switcher=button("Switch eye",()=>{selectedEyeMode=selectedEyeMode==="left"?"right":"left";if(eye)eye.mode=selectedEyeMode;},true);
  const back=button("Back to signal check",()=>{cancelAnimationFrame(microscopeFrame);eyeCheck();},true);
  const test=button("Run movement test",()=>{cancelAnimationFrame(microscopeFrame);runEyeMovementTest();});
- body.replaceChildren(label,title,note,canvas,info,quality,switcher,test,back);
+ body.replaceChildren(label,title,note,canvas,comparison,info,motion,quality,switcher,test,back);
  const ctx=canvas.getContext("2d");let microscopeFrame=0,prevX=null,prevY=null;
  const draw=()=>{
   if(!eye||root.hidden||!canvas.isConnected)return;
@@ -280,6 +284,32 @@ function eyeCameraMicroscope(){
    const sx=Math.max(0,Math.min(w-sw,cx-sw/2)),sy=Math.max(0,Math.min(h-sh,cy-sh/2));
    try{ctx.drawImage(video,sx,sy,sw,sh,0,0,720,360);}catch(_){}
    if(pts){
+    // Independent candidate is positioned from an eye-corner-aligned pixel ROI,
+    // not from the iris landmark. This marker can be wrong under shadows.
+    const pixel=eye.pixelSignal;
+    if(pixel&&pixel.landmarksAvailable&&Number.isFinite(pixel.pupilCandidateX)&&Number.isFinite(pixel.pupilCandidateY)&&performance.now()-pixel.t<650){
+     const ew=Math.hypot((pts[1].x-pts[0].x)*w,(pts[1].y-pts[0].y)*h);
+     const cw=Math.max(38,ew*1.45),ch=cw*.5;
+     const pcx=(pts[0].x+pts[1].x)*w/2,pcy=(pts[2].y+pts[3].y)*h/2;
+     const psx=Math.max(0,Math.min(w-cw,pcx-cw/2)),psy=Math.max(0,Math.min(h-ch,pcy-ch/2));
+     const mx=(psx+pixel.pupilCandidateX*cw-sx)/sw*720;
+     const my=(psy+pixel.pupilCandidateY*ch-sy)/sh*360;
+     if(Number.isFinite(mx+my)){
+      ctx.strokeStyle="#f33fc4";ctx.lineWidth=4;ctx.beginPath();ctx.arc(mx,my,12,0,Math.PI*2);ctx.stroke();
+     }
+    }
+    if(eye.latest&&eye.latest.t!==lastMotionT){
+     lastMotionT=eye.latest.t;
+     const iris=left?eye.latest.left:eye.latest.right;
+     if(iris){
+      motionHistory.push({t:lastMotionT,ix:iris.x,iy:iris.y,px:pixel?.pupilCandidateX,py:pixel?.pupilCandidateY});
+      if(motionHistory.length>80)motionHistory.shift();
+     }
+    }
+    const valid=motionHistory.filter(p=>Number.isFinite(p.ix)&&Number.isFinite(p.px));
+    const range=(key)=>valid.length>3?Math.max(...valid.map(p=>p[key]))-Math.min(...valid.map(p=>p[key])):null;
+    const fmt=n=>n==null?"—":n.toFixed(4);
+    motion.textContent="LIVE RANGE · MediaPipe X "+fmt(range("ix"))+" / Y "+fmt(range("iy"))+" · Pixel X "+fmt(range("px"))+" / Y "+fmt(range("py"))+" · "+valid.length+" paired frames. Move eyes left/right while keeping head steady.";
     pts.forEach((p,i)=>{const px=(p.x*w-sx)/sw*720,py=(p.y*h-sy)/sh*360;ctx.beginPath();ctx.arc(px,py,i===4?8:4,0,Math.PI*2);ctx.fillStyle=i===4?"#52edb2":"#ffd66e";ctx.fill();});
     const iris=left?eye.latest?.left:eye.latest?.right;
     const detected=!!iris&&performance.now()-(eye.latest?.t||0)<550;
