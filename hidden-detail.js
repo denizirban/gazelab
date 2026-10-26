@@ -342,25 +342,24 @@ async function enableEyes(){
   try{model=await mp.FaceLandmarker.createFromOptions(vision,opts);}
   catch(_){opts.baseOptions.delegate="CPU";model=await mp.FaceLandmarker.createFromOptions(vision,opts);}
   eye={stream,video,model,timer:0,start:0,samples:[],lastLandmarks:null,frames:0,lastFrameAt:0,actualFps:0};
-  // Process only freshly presented camera frames, not timer ticks on stale video.
-  // A repeated frame can otherwise make both the iris marker and pixel estimate look frozen.
+  // iOS in-app browsers can expose requestVideoFrameCallback without ever
+  // invoking it. Keep a timer watchdog, even when frame callbacks exist.
+  eye.lastProcessedAt=0;
+  eye.timer=setInterval(()=>{
+   if(!eye||eye.video!==video||eye.processing)return;
+   if(performance.now()-eye.lastProcessedAt<110)return;
+   eye.processing=true;
+   try{collectEyes();}finally{eye.processing=false;}
+  },140);
   if(typeof video.requestVideoFrameCallback==="function"){
-   eye.frameCallbackActive=true;
-   const onFrame=(_time,meta)=>{
+   const onFrame=()=>{
     if(!eye||eye.video!==video)return;
     eye.frameCallbackId=video.requestVideoFrameCallback(onFrame);
-    if(eye.processing)return;
+    if(eye.processing||performance.now()-eye.lastProcessedAt<110)return;
     eye.processing=true;
-    try{collectEyes(meta.mediaTime);}finally{eye.processing=false;}
+    try{collectEyes();}finally{eye.processing=false;}
    };
-   eye.frameCallbackId=video.requestVideoFrameCallback(onFrame);
-  }else{
-   eye.timer=setInterval(()=>{
-    if(!eye||eye.video!==video)return;
-    const frameTime=video.currentTime;
-    if(frameTime===eye.lastProcessedVideoTime)return;
-    collectEyes(frameTime);
-   },125);
+   try{eye.frameCallbackId=video.requestVideoFrameCallback(onFrame);}catch(_){}
   }
   return true;
  }catch(_){if(model)model.close();if(stream)stream.getTracks().forEach(t=>t.stop());return false;}
@@ -375,10 +374,10 @@ function stopEyes(){
 }
 function collectEyes(frameTime){
  if(!eye||eye.video.readyState<2)return;
- const videoTime=Number.isFinite(frameTime)?frameTime:eye.video.currentTime;
- if(videoTime===eye.lastProcessedVideoTime)return;
- eye.lastProcessedVideoTime=videoTime;
+ // video.currentTime can remain unchanged in some iOS embedded browsers.
+ // A live video element is sampled by the watchdog regardless of that value.
  const now=performance.now();
+ eye.lastProcessedAt=now;
  try{
   const lm=eye.model.detectForVideo(eye.video,now).faceLandmarks?.[0];
   eye.lastLandmarks=lm||null;
