@@ -263,12 +263,15 @@ function eyeCameraMicroscope(){
  const comparison=el("p","hd-note","Green: MediaPipe iris center. Magenta: experimental eye-aperture darkness centroid (not a validated iris or pupil center). Neither is validated gaze tracking.");
  const motion=el("p","hd-eye-status","Waiting for live motion comparison…");
  const motionHistory=[];let lastMotionT=0;
+ const diagnostics=el("p","hd-note","Tracking quality: waiting for multiple camera frames.");
+ let previousRaw=null,rawDisplacements=[],lastDiagEye=null;
+
 
  const quality=el("p","hd-note","Use diffuse light facing your face. Never shine a flashlight directly into your eyes.");
  const switcher=button("Switch eye",()=>{selectedEyeMode=selectedEyeMode==="left"?"right":"left";if(eye)eye.mode=selectedEyeMode;},true);
  const back=button("Back to signal check",()=>{cancelAnimationFrame(microscopeFrame);eyeCheck();},true);
  const test=button("Run movement test",()=>{cancelAnimationFrame(microscopeFrame);runEyeMovementTest();});
- body.replaceChildren(label,title,note,canvas,comparison,info,motion,quality,switcher,test,back);
+ body.replaceChildren(label,title,note,canvas,comparison,info,motion,diagnostics,quality,switcher,test,back);
  const ctx=canvas.getContext("2d");let microscopeFrame=0,prevX=null,prevY=null;
  const draw=()=>{
   if(!eye||root.hidden||!canvas.isConnected)return;
@@ -297,6 +300,20 @@ function eyeCameraMicroscope(){
      if(Number.isFinite(mx+my)){
       ctx.strokeStyle="#f33fc4";ctx.lineWidth=4;ctx.beginPath();ctx.arc(mx,my,12,0,Math.PI*2);ctx.stroke();
      }
+    }
+    if(lastDiagEye!==selectedEyeMode){lastDiagEye=selectedEyeMode;previousRaw=null;rawDisplacements=[];motionHistory.length=0;}
+    const raw=lm[left?468:473];
+    if(raw&&eye.latest&&eye.latest.t!==lastMotionT){
+      if(previousRaw){
+       const distance=Math.hypot((raw.x-previousRaw.x)*w,(raw.y-previousRaw.y)*h);
+       rawDisplacements.push(distance);
+       if(rawDisplacements.length>60)rawDisplacements.shift();
+      }
+      previousRaw={x:raw.x,y:raw.y};
+      const recent=rawDisplacements.slice(-25);
+      const max=recent.length?Math.max(...recent):0;
+      const mean=recent.length?recent.reduce((a,b)=>a+b,0)/recent.length:0;
+      diagnostics.textContent="LANDMARK MOTION · mean "+mean.toFixed(2)+" px/frame · peak "+max.toFixed(2)+" px/frame · "+(max<.25?"nearly static landmarks":max<1?"small landmark changes":"landmark movement detected")+". These are camera-image pixels, not screen gaze.";
     }
     if(eye.latest&&eye.latest.t!==lastMotionT){
      lastMotionT=eye.latest.t;
