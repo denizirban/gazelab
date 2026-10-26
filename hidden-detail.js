@@ -309,7 +309,7 @@ function eyeCameraMicroscope(){
     const valid=motionHistory.filter(p=>Number.isFinite(p.ix)&&Number.isFinite(p.px));
     const range=(key)=>valid.length>3?Math.max(...valid.map(p=>p[key]))-Math.min(...valid.map(p=>p[key])):null;
     const fmt=n=>n==null?"—":n.toFixed(4);
-    motion.textContent="V7 IRIS BOUNDARY · "+(pixel?.valid?"candidate detected":"no reliable boundary")+(pixel?.confidence!=null?" · contrast score "+pixel.confidence.toFixed(2):"")+" · MediaPipe X "+fmt(range("ix"))+" / Y "+fmt(range("iy"))+" · Pixel X "+fmt(range("px"))+" / Y "+fmt(range("py"))+" · "+valid.length+" paired frames. Move eyes left/right while keeping head steady.";
+    motion.textContent="V8 IRIS BOUNDARY · "+(pixel?.valid?"candidate detected":pixel?.irisAgreement===false?"rejected: outside iris":"no reliable boundary")+(pixel?.confidence!=null?" · contrast score "+pixel.confidence.toFixed(2):"")+" · MediaPipe X "+fmt(range("ix"))+" / Y "+fmt(range("iy"))+" · Pixel X "+fmt(range("px"))+" / Y "+fmt(range("py"))+" · "+valid.length+" paired frames. Move eyes left/right while keeping head steady.";
     pts.forEach((p,i)=>{const px=(p.x*w-sx)/sw*720,py=(p.y*h-sy)/sh*360;ctx.beginPath();ctx.arc(px,py,i===4?8:4,0,Math.PI*2);ctx.fillStyle=i===4?"#52edb2":"#ffd66e";ctx.fill();});
     const iris=left?eye.latest?.left:eye.latest?.right;
     const detected=!!iris&&performance.now()-(eye.latest?.t||0)<550;
@@ -463,13 +463,25 @@ function collectEyes(frameTime){
     const brightness=lumSum/(128*64);
     const confidence=Number.isFinite(best)?Math.max(0,Math.min(1,(best-7)/28)):0;
     const previous=eye.pixelSignal;
-    const valid=confidence>.22&&bestContrast>8&&opening>=11;
+    // Sanity-check the independently searched circle against the visible iris
+    // and eye aperture. This does NOT guide candidate search; it rejects
+    // high-contrast false positives at the inner/outer eye corners.
+    const irisIndex=selectedEyeMode==="right"?473:468;
+    const irisPoint=lm[irisIndex];
+    const irisRoiX=irisPoint?(irisPoint.x*w-sx)/cw*128:null;
+    const irisRoiY=irisPoint?(irisPoint.y*h-sy)/ch*64:null;
+    const separation=irisPoint?Math.hypot((bestX-irisRoiX)/128,(bestY-irisRoiY)/64):Infinity;
+    const nearIris=separation<.115;
+    const apertureY=(pts[2].y*h-sy)/ch*64;
+    const apertureBottom=(pts[3].y*h-sy)/ch*64;
+    const withinOpening=bestY>Math.min(apertureY,apertureBottom)-7&&bestY<Math.max(apertureY,apertureBottom)+7;
+    const valid=confidence>.22&&bestContrast>8&&opening>=11&&nearIris&&withinOpening;
     eye.pixelSignal={t:now,hash,changed:!!previous&&previous.hash!==hash,
       videoTime:v.currentTime,centerX:valid?bestX/128:null,centerY:valid?bestY/64:null,
       pupilCandidateX:valid?bestX/128:null,pupilCandidateY:valid?bestY/64:null,
       radius:valid?bestR/128:null,confidence,brightness,contrast:bestContrast,
-      eyeOpeningPx:opening,landmarksAvailable:true,valid,
-      method:"V7 iris boundary annular contrast; experimental and not validated"};
+      eyeOpeningPx:opening,landmarksAvailable:true,valid,irisAgreement:nearIris,irisSeparation:separation,
+      method:"V8 independent boundary search with iris/aperture false-positive rejection; experimental"};
    }else eye.pixelSignal={t:now,landmarksAvailable:false};
   }catch(err){eye.pixelSignal={t:now,error:String(err)};}
 
