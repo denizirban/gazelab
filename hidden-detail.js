@@ -260,7 +260,7 @@ function eyeCameraMicroscope(){
  const canvas=document.createElement("canvas");canvas.width=720;canvas.height=360;
  canvas.style.cssText="display:block;width:100%;max-width:720px;aspect-ratio:2/1;border-radius:14px;background:#111;object-fit:contain";
  const info=el("p","hd-eye-status","Waiting for landmarks…");
- const comparison=el("p","hd-note","Green: MediaPipe iris center. Magenta: independent dark-region candidate. Neither is validated gaze tracking.");
+ const comparison=el("p","hd-note","Green: MediaPipe iris center. Magenta: experimental iris-boundary candidate (only shown when image contrast passes a basic check). Neither is validated gaze tracking.");
  const motion=el("p","hd-eye-status","Waiting for live motion comparison…");
  const motionHistory=[];let lastMotionT=0;
 
@@ -302,14 +302,14 @@ function eyeCameraMicroscope(){
      lastMotionT=eye.latest.t;
      const iris=left?eye.latest.left:eye.latest.right;
      if(iris){
-      motionHistory.push({t:lastMotionT,ix:iris.x,iy:iris.y,px:pixel?.pupilCandidateX,py:pixel?.pupilCandidateY});
+      motionHistory.push({t:lastMotionT,ix:iris.x,iy:iris.y,px:pixel?.valid?pixel.pupilCandidateX:null,py:pixel?.valid?pixel.pupilCandidateY:null});
       if(motionHistory.length>80)motionHistory.shift();
      }
     }
     const valid=motionHistory.filter(p=>Number.isFinite(p.ix)&&Number.isFinite(p.px));
     const range=(key)=>valid.length>3?Math.max(...valid.map(p=>p[key]))-Math.min(...valid.map(p=>p[key])):null;
     const fmt=n=>n==null?"—":n.toFixed(4);
-    motion.textContent="LIVE RANGE · MediaPipe X "+fmt(range("ix"))+" / Y "+fmt(range("iy"))+" · Pixel X "+fmt(range("px"))+" / Y "+fmt(range("py"))+" · "+valid.length+" paired frames. Move eyes left/right while keeping head steady.";
+    motion.textContent="V7 IRIS BOUNDARY · "+(pixel?.valid?"candidate detected":"no reliable boundary")+(pixel?.confidence!=null?" · contrast score "+pixel.confidence.toFixed(2):"")+" · MediaPipe X "+fmt(range("ix"))+" / Y "+fmt(range("iy"))+" · Pixel X "+fmt(range("px"))+" / Y "+fmt(range("py"))+" · "+valid.length+" paired frames. Move eyes left/right while keeping head steady.";
     pts.forEach((p,i)=>{const px=(p.x*w-sx)/sw*720,py=(p.y*h-sy)/sh*360;ctx.beginPath();ctx.arc(px,py,i===4?8:4,0,Math.PI*2);ctx.fillStyle=i===4?"#52edb2":"#ffd66e";ctx.fill();});
     const iris=left?eye.latest?.left:eye.latest?.right;
     const detected=!!iris&&performance.now()-(eye.latest?.t||0)<550;
@@ -431,27 +431,45 @@ function collectEyes(frameTime){
      gray[y*128+x]=l;lumSum+=l;
      if(x%4===0&&y%4===0)hash=Math.imul(hash^(l/8|0),16777619)>>>0;
     }
-    // Evaluate circular darkness in the central eye opening. Spatially smooth each
-    // candidate to suppress eyelashes, reflections and single dark pixels.
-    let best=Infinity,bestX=null,bestY=null,second=Infinity;
-    for(let y=20;y<=44;y+=2)for(let x=31;x<=97;x+=2){
-     let sum=0,count=0;
-     for(let dy=-5;dy<=5;dy+=2)for(let dx=-5;dx<=5;dx+=2){
-      if(dx*dx+dy*dy>30)continue;
-      sum+=gray[(y+dy)*128+x+dx];count++;
+    // V7: iris-boundary search. Compare an inner disk with a surrounding
+    // annulus and measure radial edge consistency. A dark eyelash alone
+    // should not qualify as a pupil / iris center.
+    const at=(x,y)=>gray[y*128+x];
+    const upper=pts[2],lower=pts[3];
+    const opening=Math.abs(upper.y-lower.y)*h/Math.max(ch,1)*64;
+    const minR=Math.max(5,Math.min(10,opening*.22));
+    const maxR=Math.max(minR+2,Math.min(19,opening*.48));
+    let best=-Infinity,bestX=null,bestY=null,bestR=null,bestContrast=0;
+    for(let radius=minR;radius<=maxR;radius+=2){
+     for(let y=Math.max(12,Math.ceil(radius+3));y<=Math.min(52,Math.floor(64-radius-3));y+=2){
+      for(let x=Math.max(22,Math.ceil(radius+3));x<=Math.min(106,Math.floor(128-radius-3));x+=2){
+       let inner=0,outer=0,edge=0,innerN=0,outerN=0,edgeN=0;
+       for(let k=0;k<24;k++){
+        const theta=k*Math.PI/12,co=Math.cos(theta),si=Math.sin(theta);
+        const ix=Math.round(x+co*radius*.55),iy=Math.round(y+si*radius*.55);
+        const ox=Math.round(x+co*(radius+3)),oy=Math.round(y+si*(radius+3));
+        const ex=Math.round(x+co*(radius-2)),ey=Math.round(y+si*(radius-2));
+        inner+=at(ix,iy);outer+=at(ox,oy);edge+=at(ox,oy)-at(ex,ey);
+        innerN++;outerN++;edgeN++;
+       }
+       const contrast=outer/outerN-inner/innerN;
+       const edgeStrength=edge/edgeN;
+       // Penalize dark areas without a closed circular boundary.
+       const score=contrast*.65+edgeStrength*.35;
+       if(score>best){best=score;bestX=x;bestY=y;bestR=radius;bestContrast=contrast;}
+      }
      }
-     const score=sum/count;
-     if(score<best){second=best;best=score;bestX=x;bestY=y;}
-     else if(score<second)second=score;
     }
     const brightness=lumSum/(128*64);
-    const confidence=Number.isFinite(best)?Math.max(0,Math.min(1,(brightness-best)/Math.max(15,brightness)*1.7)):0;
+    const confidence=Number.isFinite(best)?Math.max(0,Math.min(1,(best-7)/28)):0;
     const previous=eye.pixelSignal;
+    const valid=confidence>.22&&bestContrast>8&&opening>=11;
     eye.pixelSignal={t:now,hash,changed:!!previous&&previous.hash!==hash,
-      videoTime:v.currentTime,centerX:bestX/128,centerY:bestY/64,
-      pupilCandidateX:confidence>.12?bestX/128:null,pupilCandidateY:confidence>.12?bestY/64:null,
-      confidence,brightness,contrast:brightness-best,landmarksAvailable:true,
-      method:"V6 high-resolution circular dark-region search; not validated pupil tracking"};
+      videoTime:v.currentTime,centerX:valid?bestX/128:null,centerY:valid?bestY/64:null,
+      pupilCandidateX:valid?bestX/128:null,pupilCandidateY:valid?bestY/64:null,
+      radius:valid?bestR/128:null,confidence,brightness,contrast:bestContrast,
+      eyeOpeningPx:opening,landmarksAvailable:true,valid,
+      method:"V7 iris boundary annular contrast; experimental and not validated"};
    }else eye.pixelSignal={t:now,landmarksAvailable:false};
   }catch(err){eye.pixelSignal={t:now,error:String(err)};}
 
