@@ -1,0 +1,158 @@
+{
+  "schema_version": "1.0",
+  "maintained_by": "Irispectra Gaze Lab",
+  "last_reviewed": "2026-11-01",
+  "note": "Registry only. Data not yet downloaded, harmonized, analyzed, or used to train the live gaze tracker.",
+  "datasets": [
+    {
+      "id": "tmt_pd",
+      "name": "TMT-PD event-level eye movement",
+      "url": "https://data.mendeley.com/datasets/rtf7jjssct/1",
+      "doi": "10.17632/rtf7jjssct.1",
+      "groups": {
+        "pd": 28,
+        "control": 12
+      },
+      "modality": "event-level fixation/saccade/blink and pupil-related metrics",
+      "sampling_hz": 1250,
+      "task": "Trail Making Test A/B/C",
+      "format": "xlsx",
+      "access": "public dataset",
+      "license": "CC BY 4.0",
+      "priority": 1,
+      "compatible_with_antisaccade": false,
+      "role": "PD vs controls exploratory discovery; event-based, not the anti-saccade task"
+    },
+    {
+      "id": "riga_coordinates",
+      "name": "Riga PD/HD eye-tracking coordinates",
+      "url": "https://doi.org/10.48510/FK2/JJDLNT",
+      "doi": "10.48510/FK2/JJDLNT",
+      "groups": {
+        "pd": 25,
+        "hd": 14,
+        "control": 36
+      },
+      "modality": "eye-tracking coordinates",
+      "sampling_hz": null,
+      "task": "perceptual grouping/segmentation/accentuation",
+      "format": "repository files; inspect schema",
+      "access": "dataset landing page; verify individual files",
+      "license": "verify file-level terms",
+      "priority": 1,
+      "compatible_with_antisaccade": false,
+      "role": "cross-condition exploratory discovery"
+    },
+    {
+      "id": "riga_multimodal",
+      "name": "Riga cognitive, neurological, eye-tracking and MRI",
+      "url": "https://doi.org/10.48510/FK2/S8GLCF",
+      "doi": "10.48510/FK2/S8GLCF",
+      "groups": {
+        "pd": 25,
+        "hd": 14,
+        "control": 36
+      },
+      "modality": "clinical/cognitive/oculomotor/MRI",
+      "sampling_hz": null,
+      "task": "multiple cognitive/perceptual tasks",
+      "format": "repository files; inspect schema",
+      "access": "dataset landing page; verify files",
+      "license": "verify file-level terms",
+      "priority": 2,
+      "compatible_with_antisaccade": false,
+      "role": "linked multimodal covariates; likely overlapping cohort with Riga coordinates; never double-count"
+    },
+    {
+      "id": "gazebase",
+      "name": "GazeBase longitudinal reference",
+      "url": "https://doi.org/10.1038/s41597-021-00959-y",
+      "doi": "10.1038/s41597-021-00959-y",
+      "groups": {
+        "participants": 322
+      },
+      "modality": "raw high-frequency gaze trajectories",
+      "sampling_hz": 1000,
+      "task": "fixation/horizontal and random saccades/reading/video",
+      "format": "eye tracking records",
+      "access": "open research dataset",
+      "license": "verify source terms",
+      "priority": 1,
+      "compatible_with_antisaccade": false,
+      "role": "algorithm engineering, synthetic downsampling, instrument noise benchmarking; NOT Parkinson controls matched for age"
+    },
+    {
+      "id": "oh_pd",
+      "name": "PD orthostatic hypotension gaze dataset",
+      "url": "https://doi.org/10.5683/SP3/X8YK0S",
+      "doi": "10.5683/SP3/X8YK0S",
+      "groups": {
+        "pd": null
+      },
+      "modality": "eye tracking",
+      "sampling_hz": null,
+      "task": "orthostatic hypotension study",
+      "format": "inspect repository",
+      "access": "repository",
+      "license": "CC BY 4.0 reported by NLM catalog; verify file terms",
+      "priority": 2,
+      "compatible_with_antisaccade": false,
+      "role": "explore relationship of PD/autonomic state and gaze; check clinical metadata"
+    },
+    {
+      "id": "et_pd_vis",
+      "name": "ET_PD_VIS gaze visualization images",
+      "url": "https://data.mendeley.com/datasets/83htprx9y6/1",
+      "doi": "10.17632/83htprx9y6.1",
+      "groups": {
+        "pd": null,
+        "control": null
+      },
+      "modality": "derived heatmaps/scanpaths/AOI images ONLY",
+      "sampling_hz": null,
+      "task": "Trail Making Test",
+      "format": "images",
+      "access": "public",
+      "license": "CC BY 4.0",
+      "priority": 3,
+      "compatible_with_antisaccade": false,
+      "role": "visual examples only; no raw signal timing or clinical eye-tracking validation"
+    },
+    {
+      "id": "ppmi",
+      "name": "PPMI longitudinal clinical biomarker data",
+      "url": "https://www.michaeljfox.org/parkinsons-precision-medicine-initiative-ppmi-data-repository",
+      "doi": null,
+      "groups": {
+        "participants_over": 1500
+      },
+      "modality": "clinical/imaging/omics",
+      "sampling_hz": null,
+      "task": "longitudinal Parkinson cohort",
+      "format": "various",
+      "access": "researcher registration / access terms; do not assume eye tracking",
+      "license": "controlled terms",
+      "priority": 2,
+      "compatible_with_antisaccade": false,
+      "role": "clinical covariates/longitudinal labels, only if joined legitimately, not directly comparable with gaze datasets"
+    },
+    {
+      "id": "waldthaler_2023",
+      "name": "PD saccade cluster analysis: code, data on request",
+      "url": "https://doi.org/10.1111/jnp.12302",
+      "doi": "10.1111/jnp.12302",
+      "groups": {
+        "pd": null
+      },
+      "modality": "saccade datasets (not openly downloadable)",
+      "sampling_hz": null,
+      "task": "saccade tasks",
+      "format": "R code public, deidentified data request",
+      "access": "request deidentified raw data from corresponding author",
+      "license": "permission required",
+      "priority": 2,
+      "compatible_with_antisaccade": "verify",
+      "role": "potential external validation after authorized access"
+    }
+  ]
+}
