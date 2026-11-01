@@ -44,9 +44,23 @@ body:not(.session-done) .stats{display:none}
 .notes{font-size:11px;line-height:1.55;margin:14px 0;color:#888e92}
 video{width:90px;height:68px;border-radius:9px}
 @media(max-width:540px){.shell{padding:10px 13px 24px}h1{margin-top:15px;font-size:25px}.details{gap:8px}.details label{flex:1 1 120px}.details select{max-width:100%;min-width:0}.stage{height:38dvh;min-height:225px}.buttons{gap:7px}.buttons button{flex:1 1 130px}.stats{grid-template-columns:repeat(3,minmax(0,1fr))}.stats div{padding:9px}.stats strong{font-size:16px}.stats span{font-size:10px}video{width:72px;height:55px}}
+
+
+/* In-stage eye camera: fixed to the experiment, never the viewport */
+.eye-monitor{position:absolute;z-index:5;right:12px;top:12px;width:226px;background:#16191b;border:1px solid #353c3d;border-radius:11px;padding:7px;box-shadow:0 6px 20px #00000016;color:#fff;pointer-events:auto}
+.eye-monitor[hidden]{display:none!important}
+.eye-monitor-head{display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:10px;letter-spacing:.025em;padding:0 1px 6px}
+.eye-monitor-head span{color:#d9dfdf}
+.eye-monitor-head button{background:#343c3d;border:1px solid #4a5556;color:#fff;border-radius:5px;min-height:25px;padding:3px 7px;font-size:10px;font-weight:500}
+#eyeCanvas{display:block;width:100%;height:auto;aspect-ratio:2.7/1;border-radius:5px;background:#22292b}
+.eye-monitor-foot{display:flex;justify-content:space-between;gap:4px;padding:6px 2px 1px;color:#b8c4c5;font-size:9px}
+.eye-monitor-foot span:last-child{color:#b7ded7}
+#video{position:absolute!important;left:-9999px!important;top:0!important;bottom:auto!important;right:auto!important;width:1px!important;height:1px!important;opacity:0!important;pointer-events:none!important;z-index:-1!important}
+.overlay{z-index:2}
+@media(max-width:540px){.eye-monitor{width:154px;top:7px;right:7px;padding:5px}.eye-monitor-head{font-size:9px}.eye-monitor-head button{min-height:23px;padding:2px 5px;font-size:9px}.eye-monitor-foot{font-size:8px}.stage{min-height:265px;height:40dvh}}
 </style></head><body><main class="shell"><header><a href="./index.html"><b>Gaze Lab</b> <span> / IRISPECTRA</span></a><span>RESEARCH / 01</span></header><h1>Anti-saccade</h1><p class="sub">When the blue target appears, look to the <b>opposite side</b>. The camera estimates your gaze direction.</p>
 <div class="details"><label>Trials <select id="trials"><option>12</option><option selected>24</option><option>40</option></select></label><label>Task <select id="mode"><option value="anti" selected>Anti-saccade</option><option value="pro">Pro-saccade (look toward target)</option><option value="mixed">Mixed blocks (pro + anti)</option></select></label></div>
-<section class="stage" id="stage"><div class="cross" id="cross">+</div><div class="dot" id="dot"></div><div class="gaze" id="gaze"></div><div class="overlay" id="overlay"><h2 id="headline">Ready to begin</h2><p id="instructions">Enable the camera, calibrate three points, then start. Keep your head still.</p></div></section>
+<section class="stage" id="stage"><div class="cross" id="cross">+</div><div class="dot" id="dot"></div><div class="gaze" id="gaze"></div><aside class="eye-monitor" id="eyeMonitor" hidden aria-label="Live magnified eye camera"><div class="eye-monitor-head"><span>LIVE EYE VIEW</span><button type="button" id="eyeZoom" aria-label="Change eye magnification">2×</button></div><canvas id="eyeCanvas" width="432" height="160" aria-label="Magnified live views of both eyes"></canvas><div class="eye-monitor-foot"><span id="eyeStatus">Finding eyes…</span><span>Local camera</span></div></aside><div class="overlay" id="overlay"><h2 id="headline">Ready to begin</h2><p id="instructions">Enable the camera, calibrate three points, then start. Keep your head still.</p></div></section>
 <div class="status"><span id="status">Camera off</span><span id="count">Ready</span></div><div class="buttons"><button id="camera">Start camera</button><button id="calibrate" disabled>Calibrate</button><button id="start" disabled>Start experiment</button><button id="stop" class="secondary">Stop</button><button id="export" class="secondary" disabled>Export JSON</button></div>
 <div class="stats"><div><span>Usable trials</span><strong id="usable">—</strong></div><div><span>Initial direction errors</span><strong id="errors">—</strong></div><div><span>Estimated response latency</span><strong id="latency">—</strong></div></div><div id="results"></div><details id="analysis" hidden><summary>Explore individual trials</summary><label style="font-size:13px;color:#777">Trial <select id="trialSelect" style="padding:9px;border:1px solid #ddd;border-radius:9px"></select></label><div id="trialInfo" style="font-size:12px;color:#777;padding:12px 0"></div><svg id="trace" viewBox="0 0 640 220" style="width:100%;background:white;border:1px solid #e9e9e9;border-radius:14px" role="img" aria-label="Gaze position over time"></svg><p style="color:#888;font-size:11px">Horizontal gaze estimate (black) vs stimulus onset (0 ms). Gray lines indicate left, center and right. Gaps indicate missing measurements.</p></details>
 <p class="notes">Exploratory prototype, not a validated oculography instrument. Sessions pause if center fixation drifts; recalibrate before restarting. Gaze estimates from Face Landmarker may not resolve fast saccade timing. Latency and error metrics are marked unavailable if sample coverage is inadequate. Camera frames remain on this device; model assets load from Google CDN. No video is uploaded. Results are saved only when you export them.</p></main><video id="video" autoplay playsinline muted hidden></video>
@@ -67,6 +81,45 @@ async function loadVision() {
 }
 const $=id=>document.getElementById(id),sleep=ms=>new Promise(r=>setTimeout(r,ms)), state={running:false,stream:null,tracker:null,feature:null,lastFrame:0,frameRate:0,cal:[],mapping:null,records:[],samples:[],current:null,results:null,raf:0,prebuffer:[]};
 const say=(t)=>{$("status").textContent=t}, center=()=>{$("cross").style.display="block";$("dot").style.display="none"}, overlay=(title,body)=>{$("headline").textContent=title;$("instructions").textContent=body;$("overlay").hidden=false}, hideOverlay=()=>{$("overlay").hidden=true};
+let eyeMagnification=2;
+$("eyeZoom").addEventListener("click",()=>{eyeMagnification=eyeMagnification===2?3:eyeMagnification===3?1.5:2;$("eyeZoom").textContent=eyeMagnification+"×";});
+function drawEyeMonitor(landmarks){
+ const canvas=$("eyeCanvas"),ctx=canvas.getContext("2d");
+ if(!ctx)return;
+ const video=$("video"),w=canvas.width,h=canvas.height;
+ ctx.fillStyle="#20282a";ctx.fillRect(0,0,w,h);
+ if(!video.videoWidth||!video.videoHeight)return;
+ if(!landmarks||landmarks.length<478){
+  // Untracked camera view, so users can correct their face position.
+  const vw=video.videoWidth,vh=video.videoHeight;
+  const srcW=Math.min(vw,vh*2.7),srcH=srcW/2.7;
+  ctx.save();ctx.translate(w,0);ctx.scale(-1,1);
+  ctx.drawImage(video,(vw-srcW)/2,(vh-srcH)/2,srcW,srcH,0,0,w,h);ctx.restore();
+  $("eyeStatus").textContent="Eyes not detected · adjust position";
+  return;
+ }
+ const eyes=[{corners:[33,133],iris:468},{corners:[362,263],iris:473}];
+ const vw=video.videoWidth,vh=video.videoHeight;
+ eyes.forEach((eye,index)=>{
+  const a=landmarks[eye.corners[0]],b=landmarks[eye.corners[1]];
+  const cx=(a.x+b.x)*.5*vw,cy=(a.y+b.y)*.5*vh;
+  const eyeWidth=Math.max(16,Math.hypot(a.x-b.x,a.y-b.y)*vw);
+  // Zoom means narrower camera crop, without affecting tracking coordinates.
+  const sw=Math.min(vw,Math.max(eyeWidth*1.5,eyeWidth*3.4/eyeMagnification));
+  const sh=Math.min(vh,sw*(h/(w/2)));
+  const sx=Math.max(0,Math.min(vw-sw,cx-sw/2));
+  const sy=Math.max(0,Math.min(vh-sh,cy-sh/2));
+  ctx.save();ctx.beginPath();ctx.rect(index*w/2,0,w/2-2,h);ctx.clip();
+  ctx.translate((index+1)*w/2-2,0);ctx.scale(-1,1);
+  ctx.drawImage(video,sx,sy,sw,sh,0,0,w/2-2,h);
+  ctx.restore();
+  ctx.fillStyle="#75e2c9";ctx.beginPath();
+  // Marker indicates eye region tracking, not measured pupil center.
+  ctx.arc(index*w/2+w/4,h/2,3,0,Math.PI*2);ctx.fill();
+ });
+ $("eyeStatus").textContent="Both eyes detected";
+}
+
 function irisFeature(l){const avg=ids=>ids.reduce((s,i)=>s+l[i].x,0)/ids.length;const get=(iris,inner,outer)=>{const a=avg(iris),left=l[inner].x,right=l[outer].x;return (a-Math.min(left,right))/Math.max(.001,Math.abs(right-left));};return (get([468,469,470,471,472],33,133)+get([473,474,475,476,477],362,263))/2;}
 const median=a=>{if(!a.length)return null;const b=[...a].sort((x,y)=>x-y);return b[Math.floor(b.length/2)]};
 function mapped(v){const [L,C,R]=state.mapping;return v<C ? -.8*(v-C)/(L-C):.8*(v-C)/(R-C);}
@@ -74,11 +127,11 @@ function getDir(v){if(v===null||!Number.isFinite(v))return 0;return v>.28?1:v<-.
 async function init(){try{
  $("camera").disabled=true;
  if(!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) throw new Error("Open this HTTPS page in Safari to allow camera access");
- say("Requesting camera…");state.stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:"user",width:{ideal:1280},height:{ideal:720}}});$("video").srcObject=state.stream;$("video").hidden=false;await $("video").play();say("Loading eye model…");const version=await loadVision();const wasm=await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@"+version+"/wasm");state.tracker=await FaceLandmarker.createFromOptions(wasm,{baseOptions:{modelAssetPath:"https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",delegate:"CPU"},runningMode:"VIDEO",numFaces:1,outputFaceBlendshapes:false});state.running=true;document.body.classList.add("camera-ready");loop();$("calibrate").disabled=false;$("camera").disabled=true;overlay("Camera ready","Keep the phone stable at eye height. Calibrate three points next.");say("Camera ready");}catch(e){say("Camera / model error");overlay("Could not start camera",String(e.message||e)+". Check Safari camera permissions in iPhone Settings.");release();}}
-function loop(){if(!state.running)return;const t=performance.now();try{if($("video").readyState>=2&&t-state.lastFrame>=12){const r=state.tracker.detectForVideo($("video"),t);state.lastFrame=t;const f=r.faceLandmarks?.[0];state.feature=f&&f.length>477?irisFeature(f):null;if(state.mapping&&state.feature!==null){state.prebuffer.push({t,gaze:mapped(state.feature),value:state.feature});state.prebuffer=state.prebuffer.filter(p=>t-p.t<=400);}if(state.current){state.samples.push({t:Math.round(t-state.current.at),value:state.feature, gaze:state.mapping&&state.feature!==null?mapped(state.feature):null});}if(state.mapping&&state.feature!==null){const q=Math.max(-1,Math.min(1,mapped(state.feature)));$("gaze").style.left=(50+q*40)+"%";$("gaze").style.display="block";}}}catch(e){say("Tracking error: "+e.message)}state.raf=requestAnimationFrame(loop);}
-function release(){state.running=false;document.body.classList.remove("camera-ready");cancelAnimationFrame(state.raf);state.stream?.getTracks().forEach(t=>t.stop());state.stream=null;$("video").hidden=true;$("camera").disabled=false;$("calibrate").disabled=true;$("start").disabled=true;$("gaze").style.display="none";}
+ say("Requesting camera…");state.stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:"user",width:{ideal:1280},height:{ideal:720}}});$("video").srcObject=state.stream;$("video").hidden=false;$("eyeMonitor").hidden=false;await $("video").play();say("Loading eye model…");const version=await loadVision();const wasm=await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@"+version+"/wasm");state.tracker=await FaceLandmarker.createFromOptions(wasm,{baseOptions:{modelAssetPath:"https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",delegate:"CPU"},runningMode:"VIDEO",numFaces:1,outputFaceBlendshapes:false});state.running=true;document.body.classList.add("camera-ready");loop();$("calibrate").disabled=false;$("camera").disabled=true;overlay("Camera ready","Keep the phone stable at eye height. Calibrate three points next.");say("Camera ready");}catch(e){say("Camera / model error");overlay("Could not start camera",String(e.message||e)+". Check Safari camera permissions in iPhone Settings.");release();}}
+function loop(){if(!state.running)return;const t=performance.now();try{if($("video").readyState>=2&&t-state.lastFrame>=12){const r=state.tracker.detectForVideo($("video"),t);state.lastFrame=t;const f=r.faceLandmarks?.[0];drawEyeMonitor(f);state.feature=f&&f.length>477?irisFeature(f):null;if(state.mapping&&state.feature!==null){state.prebuffer.push({t,gaze:mapped(state.feature),value:state.feature});state.prebuffer=state.prebuffer.filter(p=>t-p.t<=400);}if(state.current){state.samples.push({t:Math.round(t-state.current.at),value:state.feature, gaze:state.mapping&&state.feature!==null?mapped(state.feature):null});}if(state.mapping&&state.feature!==null){const q=Math.max(-1,Math.min(1,mapped(state.feature)));$("gaze").style.left=(50+q*40)+"%";$("gaze").style.display="block";}}}catch(e){say("Tracking error: "+e.message)}state.raf=requestAnimationFrame(loop);}
+function release(){state.running=false;document.body.classList.remove("camera-ready");cancelAnimationFrame(state.raf);state.stream?.getTracks().forEach(t=>t.stop());state.stream=null;$("video").hidden=true;$("eyeMonitor").hidden=true;$("camera").disabled=false;$("calibrate").disabled=true;$("start").disabled=true;$("gaze").style.display="none";}
 function target(x){$("cross").style.display="none";$("dot").style.display="block";$("dot").style.left=(50+x*40)+"%";}
-async function calibrate(){if(!state.running)return;$("calibrate").disabled=true;$("start").disabled=true;hideOverlay();state.mapping=null;state.cal=[];for(const x of [-1,0,1]){target(x);say("Calibrating "+(x<0?"LEFT":x>0?"RIGHT":"CENTER")+" · look at dot");await sleep(500);const frames=[];for(let j=0;j<16;j++){if(state.feature!==null)frames.push(state.feature);await sleep(45);}state.cal.push(median(frames));}center();const [L,C,R]=state.cal;if([L,C,R].some(v=>v===null)||Math.min(Math.abs(L-C),Math.abs(R-C))<.008||!((L<C&&C<R)||(L>C&&C>R))){overlay("Calibration failed","Ensure both eyes are visible, reduce reflections and try again.");say("Calibration failed");$("calibrate").disabled=false;return;}state.mapping=[L,C,R];$("start").disabled=false;$("calibrate").disabled=false;overlay("Calibrated","Try keeping your eyes on the dot as it moves. Start the experiment when ready.");say("Calibration ready");}
+async function calibrate(){if(!state.running)return;$("calibrate").disabled=true;$("start").disabled=true;hideOverlay();state.mapping=null;state.cal=[];for(const x of [-1,0,1]){target(x);say("Calibrating "+(x<0?"LEFT":x>0?"RIGHT":"CENTER")+" · look at dot");await sleep(500);const frames=[];for(let j=0;j<16;j++){if(state.feature!==null)frames.push(state.feature);await sleep(45);}state.cal.push(median(frames));}center();const [L,C,R]=state.cal;if([L,C,R].some(v=>v===null)||Math.min(Math.abs(L-C),Math.abs(R-C))<.008||!((L<C&&C<R)||(L>C&&C>R))){overlay("Calibration needs another try","Check the live eye view above. Keep both eyes visible, move closer if needed, and follow each dot with your eyes only.");say("Calibration failed");$("calibrate").disabled=false;return;}state.mapping=[L,C,R];$("start").disabled=false;$("calibrate").disabled=false;overlay("Calibrated","Try keeping your eyes on the dot as it moves. Start the experiment when ready.");say("Calibration ready");}
 function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a}
 function analyze(rec){
  const xs=rec.samples.filter(s=>s.value!==null&&Number.isFinite(s.gaze));
