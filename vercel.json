@@ -1,0 +1,49 @@
+{
+  "redirects": [
+    {
+      "source": "/",
+      "destination": "https://irispectra.com/gaze",
+      "permanent": true
+    },
+    {
+      "source": "/index.html",
+      "destination": "https://irispectra.com/gaze",
+      "permanent": true
+    },
+    {
+      "source": "/antisaccade.html",
+      "destination": "https://irispectra.com/antisaccade",
+      "permanent": true
+    },
+    {
+      "source": "/antisaccade",
+      "destination": "https://irispectra.com/antisaccade",
+      "permanent": true
+    },
+    {
+      "source": "/research",
+      "destination": "https://irispectra.com/research",
+      "permanent": true
+    },
+    {
+      "source": "/research/",
+      "destination": "https://irispectra.com/research",
+      "permanent": true
+    },
+    {
+      "source": "/research/index.html",
+      "destination": "https://irispectra.com/research",
+      "permanent": true
+    },
+    {
+      "source": "/research/workbench.html",
+      "destination": "https://irispectra.com/research/workbench",
+      "permanent": true
+    },
+    {
+      "source": "/research/workbench",
+      "destination": "https://irispectra.com/research/workbench",
+      "permanent": true
+    }
+  ]
+}
